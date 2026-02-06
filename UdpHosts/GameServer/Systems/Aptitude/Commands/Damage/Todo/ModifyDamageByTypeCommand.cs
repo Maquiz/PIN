@@ -14,6 +14,8 @@ public class ModifyDamageByTypeCommand : Command, ICommand
 
     public bool Execute(Context context)
     {
+        // Damage type resistances require target's resistance data from SDB.
+        // Pass through for now - all damage types deal full damage.
         return true;
     }
 }

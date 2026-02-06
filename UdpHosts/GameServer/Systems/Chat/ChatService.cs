@@ -40,7 +40,7 @@ public class ChatService
         ChatChannel queryChannel = (ChatChannel)query.Channel;
 
         var trimmed = query.Message.Trim();
-        if (trimmed.StartsWith('\\'))
+        if (trimmed.StartsWith('/') || trimmed.StartsWith('\\'))
         {
             CommandService.ExecuteCommand(trimmed[1..], ((CharacterEntity)entity).Player);
             Console.WriteLine(query.Message);

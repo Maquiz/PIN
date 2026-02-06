@@ -50,8 +50,15 @@ public abstract class PacketServer : IPacketSender
         while (IsRunning)
         {
             // TODO: Handle Command
-            var line = Console.ReadLine();
-            HandleCommand(line);
+            if (Console.IsInputRedirected)
+            {
+                Thread.Sleep(1000);
+            }
+            else
+            {
+                var line = Console.ReadLine();
+                HandleCommand(line);
+            }
         }
 
         if (!Source.IsCancellationRequested)
@@ -69,6 +76,12 @@ public abstract class PacketServer : IPacketSender
 
     protected virtual void HandleCommand(string line)
     {
+        if (line == null)
+        {
+            Thread.Sleep(100);
+            return;
+        }
+
         if (line.Trim().StartsWith("exit"))
         {
             IsRunning = false;

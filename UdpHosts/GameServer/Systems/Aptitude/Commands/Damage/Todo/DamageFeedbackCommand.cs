@@ -14,6 +14,7 @@ public class DamageFeedbackCommand : Command, ICommand
 
     public bool Execute(Context context)
     {
+        // Damage feedback is handled inline by ApplyDamage via TookHit/DealtHit events
         return true;
     }
 }

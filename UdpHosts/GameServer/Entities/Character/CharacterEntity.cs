@@ -137,6 +137,21 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public int SelectedLoadout { get; set; }
     public List<DeployableEntity> OwnedDeployables { get; set; } = new List<DeployableEntity>();
 
+    // NPC-specific fields
+    public Vector3 SpawnPosition { get; set; }
+    public uint MonsterTypeId { get; set; }
+    public uint FactionId { get; set; }
+    public float NpcNormalSpeed { get; set; } = 3.0f;
+    public float NpcFastSpeed { get; set; } = 6.0f;
+    public float AggroRadius { get; set; } = 60.0f;
+    public float LeashRadius { get; set; } = 120.0f;
+    public float AttackRange { get; set; } = 15.0f;
+    public int NpcDamage { get; set; } = 200;
+    public ulong LastNpcAttackTime { get; set; }
+    public uint NpcAttackIntervalMs { get; set; } = 2000;
+    public ulong NpcRespawnTime { get; set; }
+    public uint NpcRespawnDelayMs { get; set; } = 30000;
+
     public ushort StatusEffectsChangeTime_0 { get; set; }
     public ushort StatusEffectsChangeTime_1 { get; set; }
     public ushort StatusEffectsChangeTime_2 { get; set; }
@@ -203,6 +218,13 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public StatusEffectData? StatusEffects_31 { get; set; }
 
     public CharacterLoadout CurrentLoadout { get; set; }
+
+    // Health tracking
+    public int CurrentHealth { get; set; }
+    public int CurrentShields { get; set; }
+
+    // Cooldown tracking: ability ID -> ready time (in shard time ms)
+    public Dictionary<uint, uint> ActiveCooldowns { get; set; } = new();
 
     public Dictionary<StatModifierIdentifier, Dictionary<uint, ActiveStatModifier>> CurrentStatModifiers { get; set; }
     public Dictionary<StatModifierIdentifier, float> BaseStatModifiers { get; set; } = new()
@@ -326,6 +348,32 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
                 Index = 2, Unk1 = 1, Unk2 = 0, Time = Shard.CurrentTime
             });
         }
+
+        // Set NPC-specific properties
+        MonsterTypeId = typeId;
+        FactionId = monsterInfo.FactionId;
+        NpcNormalSpeed = monsterInfo.NormalSpeed > 0 ? monsterInfo.NormalSpeed : 3.0f;
+        NpcFastSpeed = monsterInfo.FastSpeed > 0 ? monsterInfo.FastSpeed : 6.0f;
+        NpcRespawnDelayMs = monsterInfo.AiSpawnDelayMs > 0 ? monsterInfo.AiSpawnDelayMs : 30000;
+
+        // Set faction/hostility from SDB data
+        if (monsterInfo.FactionId != 0)
+        {
+            HostilityInfo = new HostilityInfoData
+            {
+                Flags = HostilityInfoData.HostilityFlags.Faction,
+                FactionId = (byte)monsterInfo.FactionId
+            };
+        }
+
+        // Set NPC health (use hardcoded scaling since MonsterScaling isn't loaded)
+        int npcHealth = monsterInfo.DifficultyCost > 0 ? (int)(monsterInfo.DifficultyCost * 100) : 5000;
+        MaxHealth = new MaxVital { Value = npcHealth, Time = Shard.CurrentTime };
+        CurrentHealth = npcHealth;
+        SetHealth(npcHealth, Shard.CurrentTime);
+
+        // NPCs are alive when spawned
+        Alive = true;
     }
 
     public void LoadRemote(CharacterAndBattleframeVisuals remoteData)
@@ -727,6 +775,261 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         }
     }
     
+    public void SetHealth(int health, uint time)
+    {
+        CurrentHealth = Math.Clamp(health, 0, MaxHealth.Value);
+        if (Character_BaseController != null)
+        {
+            Character_BaseController.CurrentHealthProp = CurrentHealth;
+            Character_BaseController.MaxHealthProp = new MaxVital { Value = MaxHealth.Value, Time = time };
+        }
+
+        // Update observer view health percentage
+        byte healthPct = MaxHealth.Value > 0 ? (byte)((CurrentHealth * 100) / MaxHealth.Value) : (byte)0;
+        Character_ObserverView.CurrentHealthPctProp = healthPct;
+        Character_ObserverView.MaxHealthProp = new MaxVital { Value = MaxHealth.Value, Time = time };
+    }
+
+    public void SetShields(int shields, uint time)
+    {
+        CurrentShields = Math.Clamp(shields, 0, MaxShields.Value);
+        if (Character_BaseController != null)
+        {
+            Character_BaseController.CurrentShieldsProp = CurrentShields;
+            Character_BaseController.MaxShieldsProp = new MaxVital { Value = MaxShields.Value, Time = time };
+        }
+    }
+
+    public void ApplyDamage(int damage, IAptitudeTarget attacker, byte damageType)
+    {
+        if (!Alive || CharacterState.State != CharacterStateData.CharacterStatus.Living)
+        {
+            return;
+        }
+
+        int remaining = damage;
+        int shieldDelta = 0;
+        int healthDelta = 0;
+
+        // Shields absorb damage first
+        if (CurrentShields > 0)
+        {
+            shieldDelta = Math.Min(CurrentShields, remaining);
+            remaining -= shieldDelta;
+            SetShields(CurrentShields - shieldDelta, Shard.CurrentTime);
+        }
+
+        // Remaining damage hits health
+        if (remaining > 0)
+        {
+            healthDelta = Math.Min(CurrentHealth, remaining);
+            SetHealth(CurrentHealth - remaining, Shard.CurrentTime);
+        }
+
+        // Send TookHit to the victim
+        if (IsPlayerControlled)
+        {
+            var tookHit = new AeroMessages.GSS.V66.Character.Event.TookHit
+            {
+                HaveDamage = 1,
+                DamageData = new DamageHitStruct
+                {
+                    Target = AeroEntityId,
+                    HaveDealer = (byte)(attacker != null ? 1 : 0),
+                    Dealer = attacker?.AeroEntityId ?? new EntityId(),
+                    DamageValue = damage,
+                    DamageType = damageType
+                },
+                RepeatHitIdx = 0,
+                DamageFlags = 0,
+                ShortTime = Shard.CurrentShortTime,
+                Unk2 = 0
+            };
+            Player.NetChannels[ChannelType.ReliableGss].SendMessage(tookHit, EntityId);
+        }
+
+        // Send DealtHit to the attacker
+        if (attacker is CharacterEntity { IsPlayerControlled: true } attackerChar)
+        {
+            var dealtHit = new AeroMessages.GSS.V66.Character.Event.DealtHit
+            {
+                HaveDamage = 1,
+                DamageData = new DamageHitStruct
+                {
+                    Target = AeroEntityId,
+                    HaveDealer = 1,
+                    Dealer = attacker.AeroEntityId,
+                    DamageValue = damage,
+                    DamageType = damageType
+                },
+                RepeatHitIdx = 0,
+                DamageFlags = 0
+            };
+            attackerChar.Player.NetChannels[ChannelType.ReliableGss].SendMessage(dealtHit, attackerChar.EntityId);
+        }
+
+        Shard.EntityMan.FlushChanges(this);
+
+        // Check for death
+        if (CurrentHealth <= 0)
+        {
+            Die(attacker);
+        }
+    }
+
+    public void ApplyHealing(int healAmount)
+    {
+        if (!Alive || CharacterState.State != CharacterStateData.CharacterStatus.Living)
+        {
+            return;
+        }
+
+        SetHealth(CurrentHealth + healAmount, Shard.CurrentTime);
+        Shard.EntityMan.FlushChanges(this);
+    }
+
+    public void Die(IAptitudeTarget killer)
+    {
+        Alive = false;
+        SetCharacterState(CharacterStateData.CharacterStatus.Dead, Shard.CurrentTime);
+
+        // Send Killed event
+        if (IsPlayerControlled)
+        {
+            var killed = new AeroMessages.GSS.V66.Character.Event.Killed
+            {
+                ShortTime = Shard.CurrentShortTime,
+                Killer = killer?.AeroEntityId ?? new EntityId(),
+                Unk1 = 0,
+                Unk2 = 0,
+                Unk3 = 0
+            };
+            Player.NetChannels[ChannelType.ReliableGss].SendMessage(killed, EntityId);
+
+            // Enable respawn input
+            SetPermissionFlag(PermissionFlagsData.CharacterPermissionFlags.respawn_input, true);
+        }
+        else
+        {
+            // NPC death: schedule removal and respawn
+            NpcRespawnTime = Shard.CurrentTimeLong + NpcRespawnDelayMs;
+            Shard.AI.OnNpcDeath(this);
+        }
+
+        Shard.EntityMan.FlushChanges(this);
+    }
+
+    public void Respawn(Vector3? respawnPosition = null)
+    {
+        var pos = respawnPosition ?? Position;
+        Position = pos;
+
+        CurrentHealth = MaxHealth.Value;
+        CurrentShields = MaxShields.Value;
+        Alive = true;
+
+        SetCharacterState(CharacterStateData.CharacterStatus.Living, Shard.CurrentTime);
+        SetHealth(CurrentHealth, Shard.CurrentTime);
+        SetShields(CurrentShields, Shard.CurrentTime);
+        SetSpawnPose();
+
+        // Disable respawn input, re-enable normal permissions
+        SetPermissionFlag(PermissionFlagsData.CharacterPermissionFlags.respawn_input, false);
+
+        if (IsPlayerControlled)
+        {
+            var respawned = new AeroMessages.GSS.V66.Character.Event.Respawned
+            {
+                ShortTime = Shard.CurrentShortTime,
+                Unk1 = 0,
+                Unk2 = 0
+            };
+            Player.NetChannels[ChannelType.ReliableGss].SendMessage(respawned, EntityId);
+        }
+
+        Shard.EntityMan.FlushChanges(this);
+    }
+
+    public void SetCooldown(uint abilityId, uint durationMs)
+    {
+        uint readyTime = Shard.CurrentTime + durationMs;
+        ActiveCooldowns[abilityId] = readyTime;
+
+        if (IsPlayerControlled)
+        {
+            SendCooldownUpdate();
+        }
+    }
+
+    public bool IsOnCooldown(uint abilityId)
+    {
+        return ActiveCooldowns.TryGetValue(abilityId, out uint readyTime) && Shard.CurrentTime < readyTime;
+    }
+
+    public void ReduceCooldowns(uint reductionMs)
+    {
+        var keys = new List<uint>(ActiveCooldowns.Keys);
+        foreach (var key in keys)
+        {
+            uint readyTime = ActiveCooldowns[key];
+            if (readyTime > reductionMs)
+            {
+                ActiveCooldowns[key] = readyTime - reductionMs;
+            }
+            else
+            {
+                ActiveCooldowns.Remove(key);
+            }
+        }
+
+        if (IsPlayerControlled)
+        {
+            SendCooldownUpdate();
+        }
+    }
+
+    public void ResetAllCooldowns()
+    {
+        ActiveCooldowns.Clear();
+
+        if (IsPlayerControlled)
+        {
+            SendCooldownUpdate();
+        }
+    }
+
+    private void SendCooldownUpdate()
+    {
+        var activeCooldownsList = new List<AeroMessages.GSS.V66.Character.ActiveCooldown>();
+        foreach (var (abilityId, readyTime) in ActiveCooldowns)
+        {
+            if (Shard.CurrentTime < readyTime)
+            {
+                activeCooldownsList.Add(new AeroMessages.GSS.V66.Character.ActiveCooldown
+                {
+                    AbilityId = abilityId,
+                    Activated_Time = Shard.CurrentTime,
+                    ReadyAgain_Time = readyTime,
+                    Unk = new byte[5]
+                });
+            }
+        }
+
+        var cooldowns = new AeroMessages.GSS.V66.Character.Event.AbilityCooldowns
+        {
+            Data = new AeroMessages.GSS.V66.Character.AbilityCooldownsData
+            {
+                ActiveCooldowns_Group1 = activeCooldownsList.ToArray(),
+                ActiveCooldowns_Group2 = Array.Empty<AeroMessages.GSS.V66.Character.ActiveCooldown>(),
+                GlobalCooldown_Activated_Time = Shard.CurrentTime,
+                GlobalCooldown_ReadyAgain_Time = Shard.CurrentTime,
+                Unk = 0
+            }
+        };
+
+        Player.NetChannels[ChannelType.ReliableGss].SendMessage(cooldowns, EntityId);
+    }
+
     public void SetControllingPlayer(INetworkPlayer player)
     {
         Player = player;
@@ -1186,6 +1489,8 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         HostilityInfo = new HostilityInfoData { Flags = 0 | HostilityInfoData.HostilityFlags.Faction, FactionId = 1 };
         MaxShields = new MaxVital { Value = 0, Time = Shard.CurrentTime };
         MaxHealth = new MaxVital { Value = 19192, Time = Shard.CurrentTime };
+        CurrentHealth = MaxHealth.Value;
+        CurrentShields = MaxShields.Value;
         GibVisualsInfo = new GibVisuals { Id = 0, Time = Shard.CurrentTime };
         ProcessDelay = new ProcessDelayData { Unk1 = 30721, Unk2 = 236 };
         Emote = new EmoteData { Id = 0, Time = 0 };

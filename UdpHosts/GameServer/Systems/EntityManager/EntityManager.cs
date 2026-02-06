@@ -69,8 +69,13 @@ public class EntityManager
         characterEntity.LoadMonster(typeId);
         characterEntity.SetCharacterState(CharacterStateData.CharacterStatus.Living, Shard.CurrentTime);
         characterEntity.SetPosition(position);
+        characterEntity.SpawnPosition = position;
         characterEntity.SetSpawnPose();
         Add(characterEntity.EntityId, characterEntity);
+
+        // Register NPC with AI system
+        Shard.AI.RegisterNpc(characterEntity);
+
         return characterEntity;
     }
 

@@ -35,6 +35,14 @@ public class CombatController : Base
         player.CharacterEntity.SetFireBurst(query.Time);
     }
 
+    [MessageID((byte)Commands.ReportProjectileHit)]
+    public void ReportProjectileHit(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
+    {
+        // Damage is applied server-side in ProjectileSim when the raycast hits an entity.
+        // This handler acknowledges the client's hit confirmation to suppress unhandled warnings.
+        var report = packet.Unpack<AeroMessages.GSS.V66.Character.Command.ReportProjectileHit>();
+    }
+
     [MessageID((byte)Commands.FireWeaponProjectile)]
     public void FireWeaponProjectile(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
     {

@@ -14,6 +14,8 @@ public class RemoveEffectByTagCommand : Command, ICommand
 
     public bool Execute(Context context)
     {
+        // Effect tag system not yet implemented.
+        // Would remove all effects with a matching tag from target.
         return true;
     }
 }

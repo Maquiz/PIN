@@ -14,6 +14,17 @@ public class ApplyPermanentEffectCommand : Command, ICommand
 
     public bool Execute(Context context)
     {
+        if (Params.EffectId == 0)
+        {
+            return true;
+        }
+
+        var effect = context.Abilities.Factory.LoadEffect(Params.EffectId);
+        if (effect != null)
+        {
+            context.Self.AddEffect(effect, context);
+        }
+
         return true;
     }
 }

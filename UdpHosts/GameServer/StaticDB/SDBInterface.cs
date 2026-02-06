@@ -503,6 +503,7 @@ public class SDBInterface
     public static Dictionary<byte, CharCreateLoadoutSlots> GetCharCreateLoadoutSlots(uint id) => CharCreateLoadoutSlots.GetValueOrDefault(id);
     public static Deployable GetDeployable(uint id) => Deployable.GetValueOrDefault(id);
     public static Monster GetMonster(uint id) => Monster.GetValueOrDefault(id);
+    public static Dictionary<uint, Monster> GetAllMonsters() => Monster;
     public static Turret GetTurret(uint id) => Turret.GetValueOrDefault(id);
 
     // dbvisaulrecords

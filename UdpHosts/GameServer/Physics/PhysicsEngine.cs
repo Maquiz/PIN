@@ -77,11 +77,12 @@ public class PhysicsEngine
         currentPose.Orientation = entity.Rotation;
     }
 
-    public void ProjectileRayCast(Vector3 origin, Vector3 direction, CharacterEntity source, uint trace)
+    public ulong ProjectileRayCast(Vector3 origin, Vector3 direction, CharacterEntity source, uint trace)
     {
         var speed = 500f;
         var maxRange = 500f;
-        
+        ulong hitEntityId = 0;
+
         SendDebugProjectileSpawn(source, trace, origin, direction, speed);
 
         var hitHandler = default(RayHitHandler);
@@ -91,7 +92,7 @@ public class PhysicsEngine
 
         Simulation.RayCast(origin, direction, float.MaxValue, ref hitHandler);
         if (hitHandler.T < maxRange)
-        {   
+        {
             var hitPosition = origin + (direction * hitHandler.T);
             Console.WriteLine($"HitHandler {hitHandler.HitCollidable.Mobility} T {hitHandler.T} HitCollidable {hitHandler.HitCollidable} at {hitPosition}");
 
@@ -102,12 +103,12 @@ public class PhysicsEngine
                 var bodyPosition = Simulation.Bodies[hitHandler.HitCollidable.BodyHandle].Pose.Position;
                 bodyPosition.Z -= 0.9f;
                 SendDebugProjectilePoseHit(source, trace, hitPosition, bodyPosition);
+
+                _bodyToEntityId.TryGetValue(hitHandler.HitCollidable.BodyHandle, out hitEntityId);
             }
         }
-        else
-        {
-            // Console.WriteLine($"Nothing hit");
-        }
+
+        return hitEntityId;
     }
 
     public (bool, Vector3, ulong) TargetRayCast(Vector3 origin, Vector3 direction, CharacterEntity source, float maxRange = 500f)

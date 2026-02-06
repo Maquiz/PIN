@@ -14,6 +14,8 @@ public class RegisterEffectTagTriggerCommand : Command, ICommand
 
     public bool Execute(Context context)
     {
+        // Effect tag triggers require an effect tag system to be implemented.
+        // Pass through for now - effects are applied/removed directly.
         return true;
     }
 }

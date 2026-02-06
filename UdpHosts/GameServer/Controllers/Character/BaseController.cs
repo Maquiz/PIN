@@ -519,4 +519,24 @@ public class BaseController : Base
 
         client.AssignedShard.EncounterMan.HandleUiQueryResponse(response, (INetworkPlayer)player);
     }
+
+    [MessageID((byte)Commands.RequestRespawn)]
+    public void RequestRespawn(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
+    {
+        var character = player.CharacterEntity;
+        if (character != null && !character.Alive)
+        {
+            character.Respawn();
+        }
+    }
+
+    [MessageID((byte)Commands.RequestSelfRevive)]
+    public void RequestSelfRevive(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
+    {
+        var character = player.CharacterEntity;
+        if (character != null && !character.Alive)
+        {
+            character.Respawn();
+        }
+    }
 }

@@ -39,6 +39,7 @@ public class Shard : IShard
         Outposts = new ConcurrentDictionary<uint, IDictionary<uint, OutpostEntity>>();
         Physics = new PhysicsEngine(this);
         AI = new AIEngine();
+        AI.Init(this);
         Movement = new MovementRelay(this);
         Abilities = new AbilitySystem(this);
         EntityMan = new EntityManager(this);
