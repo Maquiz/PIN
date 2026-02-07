@@ -14,8 +14,15 @@ using Serilog;
 
 namespace GameServer.Physics;
 
+public struct ProjectileHitResult
+{
+    public ulong EntityId;
+    public Vector3 HitPosition;
+    public bool HitAnything;
+}
+
 public class PhysicsEngine
-{    
+{
     public const float TargetTimestepDuration = 50; // (1/20f)
 
     private Shard _shard;
@@ -112,11 +119,18 @@ public class PhysicsEngine
         _bodyHeightOffset.Remove(bodyHandle);
     }
 
-    public ulong ProjectileRayCast(Vector3 origin, Vector3 direction, CharacterEntity source, uint trace)
+    public float? SampleGroundHeight(Vector3 position, float probeHeight = 50f, float maxDepth = 100f)
+    {
+        var origin = new Vector3(position.X, position.Y, position.Z + probeHeight);
+        var handler = new StaticOnlyRayHitHandler { T = maxDepth };
+        Simulation.RayCast(origin, -Vector3.UnitZ, maxDepth, ref handler);
+        return handler.Hit ? origin.Z - handler.T : null;
+    }
+
+    public ProjectileHitResult ProjectileRayCast(Vector3 origin, Vector3 direction, CharacterEntity source, uint trace, float maxRange = 500f)
     {
         var speed = 500f;
-        var maxRange = 500f;
-        ulong hitEntityId = 0;
+        var result = new ProjectileHitResult();
 
         SendDebugProjectileSpawn(source, trace, origin, direction, speed);
 
@@ -129,6 +143,8 @@ public class PhysicsEngine
         if (hitHandler.T < maxRange)
         {
             var hitPosition = origin + (direction * hitHandler.T);
+            result.HitPosition = hitPosition;
+            result.HitAnything = true;
             Console.WriteLine($"HitHandler {hitHandler.HitCollidable.Mobility} T {hitHandler.T} HitCollidable {hitHandler.HitCollidable} at {hitPosition}");
 
             SendDebugProjectileImpact(source, trace, hitPosition, hitHandler.Normal);
@@ -140,11 +156,28 @@ public class PhysicsEngine
                 bodyPosition.Z -= offset;
                 SendDebugProjectilePoseHit(source, trace, hitPosition, bodyPosition);
 
-                _bodyToEntityId.TryGetValue(hitHandler.HitCollidable.BodyHandle, out hitEntityId);
+                _bodyToEntityId.TryGetValue(hitHandler.HitCollidable.BodyHandle, out result.EntityId);
             }
         }
 
-        return hitEntityId;
+        return result;
+    }
+
+    public List<(ulong EntityId, float Distance)> FindEntitiesInRadius(
+        Vector3 center, float radius, ulong excludeEntityId = 0)
+    {
+        var results = new List<(ulong, float)>();
+        foreach (var (bodyHandle, entityId) in _bodyToEntityId)
+        {
+            if (entityId == excludeEntityId) continue;
+            var bodyPos = Simulation.Bodies[bodyHandle].Pose.Position;
+            float offset = _bodyHeightOffset.GetValueOrDefault(bodyHandle, 0.9f);
+            bodyPos.Z -= offset;
+            float dist = Vector3.Distance(center, bodyPos);
+            if (dist <= radius)
+                results.Add((entityId, dist));
+        }
+        return results;
     }
 
     public (bool, Vector3, ulong) TargetRayCast(Vector3 origin, Vector3 direction, CharacterEntity source, float maxRange = 500f)
@@ -245,6 +278,29 @@ public class PhysicsEngine
         {
             // Console.WriteLine($"SendDebugProjectilePoseHit");
             source.Player.NetChannels[ChannelType.ReliableGss].SendMessage(msg, source.EntityId);
+        }
+    }
+
+    private struct StaticOnlyRayHitHandler : IRayHitHandler
+    {
+        public float T;
+        public bool Hit;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool AllowTest(CollidableReference collidable)
+            => collidable.Mobility == CollidableMobility.Static;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool AllowTest(CollidableReference collidable, int childIndex)
+            => collidable.Mobility == CollidableMobility.Static;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void OnRayHit(in RayData ray, ref float maximumT, float t,
+                             Vector3 normal, CollidableReference collidable, int childIndex)
+        {
+            maximumT = t;
+            T = t;
+            Hit = true;
         }
     }
 
