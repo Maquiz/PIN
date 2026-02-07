@@ -151,6 +151,8 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public uint NpcAttackIntervalMs { get; set; } = 2000;
     public ulong NpcRespawnTime { get; set; }
     public uint NpcRespawnDelayMs { get; set; } = 30000;
+    public float CollisionRadius { get; set; } = 0.9f;
+    public float CollisionHeight { get; set; } = 1.8f;
 
     public ushort StatusEffectsChangeTime_0 { get; set; }
     public ushort StatusEffectsChangeTime_1 { get; set; }
@@ -371,6 +373,10 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         MaxHealth = new MaxVital { Value = npcHealth, Time = Shard.CurrentTime };
         CurrentHealth = npcHealth;
         SetHealth(npcHealth, Shard.CurrentTime);
+
+        // Set collision dimensions from SDB
+        CollisionRadius = monsterInfo.BodyRadius > 0 ? monsterInfo.BodyRadius : 0.9f;
+        CollisionHeight = monsterInfo.BodyHeight > 0 ? monsterInfo.BodyHeight : 1.8f;
 
         // NPCs are alive when spawned
         Alive = true;
@@ -911,12 +917,30 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         }
         else
         {
-            // NPC death: schedule removal and respawn
+            // NPC death: broadcast Killed to all clients
+            var killed = new AeroMessages.GSS.V66.Character.Event.Killed
+            {
+                ShortTime = Shard.CurrentShortTime,
+                Killer = killer?.AeroEntityId ?? new EntityId(),
+                Unk1 = 0,
+                Unk2 = 0,
+                Unk3 = 0
+            };
+            foreach (var client in Shard.Clients.Values)
+            {
+                if (client.Status.Equals(IPlayer.PlayerStatus.Playing))
+                {
+                    client.NetChannels[ChannelType.ReliableGss].SendMessage(killed, EntityId);
+                }
+            }
+
             NpcRespawnTime = Shard.CurrentTimeLong + NpcRespawnDelayMs;
             Shard.AI.OnNpcDeath(this);
-        }
 
-        Shard.EntityMan.FlushChanges(this);
+            // End any weapon burst animation on death (NPC only — client handles player weapon state)
+            SetFireEnd(Shard.CurrentTime);
+            Shard.EntityMan.FlushChanges(this);
+        }
     }
 
     public void Respawn(Vector3? respawnPosition = null)

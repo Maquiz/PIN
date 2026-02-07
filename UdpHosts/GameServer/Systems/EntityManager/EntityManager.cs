@@ -277,13 +277,11 @@ public class EntityManager
     public void TempSpawnTestEntities()
     {
         // Aero
-        var aero = SpawnCharacter(356, new Vector3(167.84642f, 262.20822f, 491.86758f));
+        // Aero — moved away from spawn point to avoid instant aggro on respawn
+        var aero = SpawnCharacter(356, new Vector3(300.0f, 262.0f, 491.86758f));
 
         // Battleframe Station
         SpawnDeployable(395, new Vector3(170.84642f, 243.20822f, 491.71597f), new Quaternion(0f, 0f, 0.92874485f, 0.37071964f));
-
-        // Thumper
-        Shard.EncounterMan.CreateThumper(20, new Vector3(158.3f, 249.3f, 491.93f), aero, SDBInterface.GetResourceNodeBeaconCalldownCommandDef(766269));
 
         // Datapad
         SpawnCarryable(26, new Vector3(160.3f, 250.3f, 491.93f));

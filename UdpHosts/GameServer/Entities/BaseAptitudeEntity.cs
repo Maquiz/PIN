@@ -98,6 +98,25 @@ public abstract class BaseAptitudeEntity : BaseEntity, IAptitudeTarget
         Shard.EntityMan.FlushChanges(this); // Force flush so that we communicate every change
     }
 
+    public void ClearAllEffects(bool flush = true)
+    {
+        var time = unchecked((ushort)Shard.CurrentTime);
+        for (byte i = 0; i < MaxEffectCount; i++)
+        {
+            if (ActiveEffects[i] != null)
+            {
+                var effectId = ActiveEffects[i].Effect.Id;
+                ActiveEffects[i] = null;
+                ClearStatusEffect(i, time, effectId);
+            }
+        }
+
+        if (flush)
+        {
+            Shard.EntityMan.FlushChanges(this);
+        }
+    }
+
     public abstract void SetStatusEffect(byte index, ushort time, StatusEffectData data);
     public abstract void ClearStatusEffect(byte index, ushort time, uint debugEffectId);
 }

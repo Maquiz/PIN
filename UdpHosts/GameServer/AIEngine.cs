@@ -241,6 +241,11 @@ public class AIEngine
                 if (currentTime >= npc.LastNpcAttackTime + npc.NpcAttackIntervalMs)
                 {
                     npc.LastNpcAttackTime = currentTime;
+
+                    // Trigger weapon fire animation for all observers
+                    npc.SetFireBurst(_shard.CurrentTime);
+                    _shard.EntityMan.FlushChanges(npc);
+
                     target.ApplyDamage(npc.NpcDamage, npc, 0);
                 }
 
@@ -374,6 +379,10 @@ public class AIEngine
         if (direction.LengthSquared() > 0.01f)
         {
             npc.AimDirection = Vector3.Normalize(direction);
+
+            // Compute yaw rotation around Z (Firefall Z-up)
+            float yaw = MathF.Atan2(direction.X, direction.Y);
+            npc.Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, yaw);
         }
     }
 }

@@ -22,6 +22,10 @@ public class PhysicsEngine
     private ILogger _logger;
     private TypedIndex _defaultCharacterShape;
     private Dictionary<BodyHandle, ulong> _bodyToEntityId = new();
+    private Dictionary<BodyHandle, float> _bodyHeightOffset = new();
+
+    private static readonly Quaternion CapsuleUprightOrientation =
+        Quaternion.CreateFromAxisAngle(Vector3.UnitX, MathF.PI / 2f);
 
     public PhysicsEngine(Shard shard)
     {
@@ -63,9 +67,29 @@ public class PhysicsEngine
 
     public BodyHandle CreateKineticEntity(CharacterEntity entity)
     {
-        var pose = new RigidPose { Position = entity.Position, Orientation = entity.Rotation };
-        var body = Simulation.Bodies.Add(BodyDescription.CreateKinematic(pose, _defaultCharacterShape, -1));
+        float radius = entity.CollisionRadius;
+        float height = entity.CollisionHeight;
+        TypedIndex shapeIndex;
+
+        if (height > radius * 2.0f)
+        {
+            float capsuleLength = height - (radius * 2.0f);
+            shapeIndex = Simulation.Shapes.Add(new Capsule(radius, capsuleLength));
+        }
+        else
+        {
+            shapeIndex = Simulation.Shapes.Add(new Sphere(radius));
+        }
+
+        float halfHeight = height * 0.5f;
+        var pose = new RigidPose
+        {
+            Position = entity.Position + new Vector3(0, 0, halfHeight),
+            Orientation = CapsuleUprightOrientation
+        };
+        var body = Simulation.Bodies.Add(BodyDescription.CreateKinematic(pose, shapeIndex, -1));
         _bodyToEntityId[body] = entity.EntityId;
+        _bodyHeightOffset[body] = halfHeight;
         return body;
     }
 
@@ -73,8 +97,19 @@ public class PhysicsEngine
     {
         ref var currentPose = ref Simulation.Bodies[entity.BodyHandle].Pose;
         currentPose.Position = entity.Position;
-        currentPose.Position.Z += 0.9f;
-        currentPose.Orientation = entity.Rotation;
+        currentPose.Position.Z += entity.CollisionHeight * 0.5f;
+        currentPose.Orientation = CapsuleUprightOrientation;
+    }
+
+    public void RemoveEntity(BodyHandle bodyHandle)
+    {
+        if (Simulation.Bodies.BodyExists(bodyHandle))
+        {
+            Simulation.Bodies.Remove(bodyHandle);
+        }
+
+        _bodyToEntityId.Remove(bodyHandle);
+        _bodyHeightOffset.Remove(bodyHandle);
     }
 
     public ulong ProjectileRayCast(Vector3 origin, Vector3 direction, CharacterEntity source, uint trace)
@@ -101,7 +136,8 @@ public class PhysicsEngine
             if (hitHandler.HitCollidable.Mobility == CollidableMobility.Kinematic)
             {
                 var bodyPosition = Simulation.Bodies[hitHandler.HitCollidable.BodyHandle].Pose.Position;
-                bodyPosition.Z -= 0.9f;
+                float offset = _bodyHeightOffset.GetValueOrDefault(hitHandler.HitCollidable.BodyHandle, 0.9f);
+                bodyPosition.Z -= offset;
                 SendDebugProjectilePoseHit(source, trace, hitPosition, bodyPosition);
 
                 _bodyToEntityId.TryGetValue(hitHandler.HitCollidable.BodyHandle, out hitEntityId);

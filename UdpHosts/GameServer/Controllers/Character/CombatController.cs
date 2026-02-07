@@ -282,6 +282,18 @@ public class CombatController : Base
 
             var initiator = character as IAptitudeTarget;
             var shard = player.CharacterEntity.Shard;
+
+            // Log raw targets from client for diagnostics
+            if (activateAbility.Targets.Length > 0)
+            {
+                foreach (var t in activateAbility.Targets)
+                {
+                    var maskedId = t.Backing & 0xffffffffffffff00;
+                    var found = shard.Entities.TryGetValue(maskedId, out var ent);
+                    Console.WriteLine($"  Target {t.Backing:X16} -> masked {maskedId:X16} found={found} type={ent?.GetType().Name}");
+                }
+            }
+
             var targets = activateAbility.Targets
             .Where(entityId =>
             {
@@ -297,6 +309,7 @@ public class CombatController : Base
             .Select(entityId => (IAptitudeTarget)shard.Entities[entityId.Backing & 0xffffffffffffff00])
             .ToArray();
 
+            Console.WriteLine($"ActivateAbility {abilityId} with {targets.Length} resolved targets (from {activateAbility.Targets.Length} client targets)");
             shard.Abilities.HandleActivateAbility(shard, initiator, abilityId, activationTime, new AptitudeTargets(targets));
         }
     }

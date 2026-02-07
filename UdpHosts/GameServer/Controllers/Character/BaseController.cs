@@ -526,7 +526,7 @@ public class BaseController : Base
         var character = player.CharacterEntity;
         if (character != null && !character.Alive)
         {
-            character.Respawn();
+            player.Respawn();
         }
     }
 
@@ -536,7 +536,7 @@ public class BaseController : Base
         var character = player.CharacterEntity;
         if (character != null && !character.Alive)
         {
-            character.Respawn();
+            player.Respawn();
         }
     }
 }

@@ -13,7 +13,7 @@ public class RespawnChatCommand : ChatCommand
         var character = context.SourcePlayer.CharacterEntity;
         if (character != null && !character.Alive)
         {
-            character.Respawn();
+            context.SourcePlayer.Respawn();
             SourceFeedback("You have been respawned.", context);
         }
         else

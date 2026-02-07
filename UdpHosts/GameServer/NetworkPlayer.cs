@@ -144,10 +144,47 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
 
     public void Respawn()
     {
-        var outpostId = FindClosestAvailableOutpost(CurrentZone, CurrentOutpostId);
-        var spawnPoint = outpostId == 0 ?
-                             new SpawnPoint { Position = CurrentZone.POIs["spawn"] }
-                             : AssignedShard.Outposts[CurrentZone.ID][outpostId].RandomSpawnPoint;
+        Console.WriteLine($"[Respawn] Starting respawn for {CharacterEntity?.EntityId}, Alive={CharacterEntity?.Alive}");
+
+        if (CurrentZone == null)
+        {
+            Console.WriteLine("[Respawn] CurrentZone is null, cannot respawn");
+            return;
+        }
+
+        try
+        {
+            RespawnInternal();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Respawn] FAILED: {ex}");
+            // Ensure the player can at least try again
+            if (CharacterEntity != null)
+            {
+                CharacterEntity.Alive = false;
+            }
+        }
+    }
+
+    private void RespawnInternal()
+    {
+        SpawnPoint spawnPoint;
+        try
+        {
+            var outpostId = FindClosestAvailableOutpost(CurrentZone, CurrentOutpostId);
+            spawnPoint = outpostId == 0
+                ? new SpawnPoint { Position = CurrentZone.POIs["spawn"] }
+                : AssignedShard.Outposts[CurrentZone.ID][outpostId].RandomSpawnPoint;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Respawn] Failed to find spawn point, falling back to current position: {ex.Message}");
+            spawnPoint = new SpawnPoint { Position = CharacterEntity.Position };
+        }
+
+        // Clear stale effects from previous life
+        CharacterEntity.ClearAllEffects(flush: false);
 
         CharacterEntity.PositionAtSpawnPoint(spawnPoint);
         CharacterEntity.SetSpawnTime(AssignedShard.CurrentTime);
@@ -173,7 +210,7 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         CharacterEntity.SetSpawnTime(AssignedShard.CurrentTime);
         CharacterEntity.SetCharacterState(CharacterStateData.CharacterStatus.Respawning, AssignedShard.CurrentTime);
         CharacterEntity.SetSpawnPose();
-        baseController.RespawnTimesProp = new RespawnTimesData(); 
+        baseController.RespawnTimesProp = new RespawnTimesData();
         baseController.RespawnTimesProp = null; // Make the field dirty so we send clear because we probably should send clear. At some point investigaste if this is neccessary.
         baseController.TimedDailyRewardProp = new TimedDailyRewardData { State = TimedDailyRewardData.TimedDailyRewardState.ROLLED, MaxRolls = 1, CountdownToTime = AssignedShard.CurrentTime };
         NetChannels[ChannelType.ReliableGss].SendChanges(baseController, CharacterEntity.EntityId);
@@ -195,7 +232,7 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         };
         NetChannels[ChannelType.ReliableGss].SendChanges(baseController, CharacterEntity.EntityId);
 
-        // Hack to add in jetpack fx until we hook up item effects
+        // Re-apply jetpack fx (hack until we hook up item effects)
         CharacterEntity.AddEffect(AssignedShard.Abilities.Factory.LoadEffect(986), new Aptitude.Context(AssignedShard, CharacterEntity)
         {
             InitTime = AssignedShard.CurrentTime,
@@ -205,11 +242,15 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
             InitTime = AssignedShard.CurrentTime,
         });
 
-        var combatController = new CombatController
-        {
-            CombatTimer_0Prop = AssignedShard.CurrentTime,
-        };
-        NetChannels[ChannelType.ReliableGss].SendChanges(combatController, CharacterEntity.EntityId);
+        // Clear respawn_input permission, restore normal combat state
+        CharacterEntity.SetPermissionFlag(PermissionFlagsData.CharacterPermissionFlags.respawn_input, false);
+
+        // Reset combat timer on the real controller
+        CharacterEntity.Character_CombatController.CombatTimer_0Prop = AssignedShard.CurrentTime;
+
+        // Send full CombatController keyframe to ensure client has complete, consistent state
+        NetChannels[ChannelType.ReliableGss].SendControllerKeyframe(
+            CharacterEntity.Character_CombatController, CharacterEntity.EntityId, PlayerId);
 
         // InventoryUpdate
         Inventory.SendFullInventory();
