@@ -12,6 +12,7 @@ using GameServer.Aptitude;
 using GameServer.Data;
 using GameServer.Data.SDB;
 using GameServer.Data.SDB.Records.customdata;
+using GameServer.Data.SDB.Records.dbitems;
 using GameServer.Entities.Deployable;
 using GameServer.Enums;
 using GameServer.Systems.Encounters;
@@ -151,8 +152,16 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public uint NpcAttackIntervalMs { get; set; } = 2000;
     public ulong NpcRespawnTime { get; set; }
     public uint NpcRespawnDelayMs { get; set; } = 30000;
+    public byte NpcLevel { get; set; } = 1;
+    public byte DamageResponseId { get; set; }
     public float CollisionRadius { get; set; } = 0.9f;
     public float CollisionHeight { get; set; } = 1.8f;
+    public WeaponTemplateResult NpcWeaponTemplate { get; set; }
+    public Ammo NpcAmmo { get; set; }
+    public float NpcAimInaccuracy { get; set; } = 0.05f;  // radians of aim cone
+    public List<Vector3> NpcCurrentPath { get; set; }
+    public int NpcPathIndex { get; set; }
+    public ulong NpcLastPathTime { get; set; }
 
     public ushort StatusEffectsChangeTime_0 { get; set; }
     public ushort StatusEffectsChangeTime_1 { get; set; }
@@ -368,8 +377,28 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
             };
         }
 
-        // Set NPC health (use hardcoded scaling since MonsterScaling isn't loaded)
-        int npcHealth = monsterInfo.DifficultyCost > 0 ? (int)(monsterInfo.DifficultyCost * 100) : 5000;
+        // Set damage response profile
+        DamageResponseId = monsterInfo.DamageResponseId;
+
+        // Set NPC health from MonsterScaling table (global level-based scaling)
+        var scaling = SDBInterface.GetMonsterScaling(NpcLevel);
+        int npcHealth;
+        if (scaling != null)
+        {
+            npcHealth = scaling.Health > 0 ? (int)scaling.Health : 5000;
+            if (scaling.Damage > 0)
+            {
+                NpcDamage = (int)scaling.Damage;
+            }
+
+            Console.WriteLine($"[AI] NPC type={typeId} scaled: level={NpcLevel} hp={npcHealth} damage={NpcDamage}");
+        }
+        else
+        {
+            // Fallback to hardcoded formula
+            npcHealth = monsterInfo.DifficultyCost > 0 ? (int)(monsterInfo.DifficultyCost * 100) : 5000;
+        }
+
         MaxHealth = new MaxVital { Value = npcHealth, Time = Shard.CurrentTime };
         CurrentHealth = npcHealth;
         SetHealth(npcHealth, Shard.CurrentTime);
@@ -380,6 +409,31 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
 
         // NPCs are alive when spawned
         Alive = true;
+
+        // Load NPC weapon stats from SDB
+        uint npcWeaponId = monsterInfo.Weapon1Id != 0 ? monsterInfo.Weapon1Id : monsterInfo.Weapon2Id;
+        if (npcWeaponId != 0)
+        {
+            var weaponInfo = SDBUtils.GetDetailedWeaponInfo(npcWeaponId);
+            if (weaponInfo?.Main != null)
+            {
+                NpcWeaponTemplate = weaponInfo.Main;
+                if (NpcWeaponTemplate.DamagePerRound > 0)
+                    NpcDamage = NpcWeaponTemplate.DamagePerRound;
+                if (NpcWeaponTemplate.Range > 0)
+                    AttackRange = NpcWeaponTemplate.Range;
+                if (NpcWeaponTemplate.MsPerBurst > 0)
+                    NpcAttackIntervalMs = NpcWeaponTemplate.MsPerBurst;
+                if (NpcWeaponTemplate.AmmoId != 0)
+                    NpcAmmo = SDBInterface.GetAmmo(NpcWeaponTemplate.AmmoId);
+
+                NpcAimInaccuracy = Math.Clamp(
+                    NpcWeaponTemplate.MinSpread > 0 ? NpcWeaponTemplate.MinSpread * 1.5f : 0.05f,
+                    0.01f, 0.15f);
+
+                Console.WriteLine($"[AI] NPC loaded weapon {npcWeaponId}: damage={NpcDamage} range={AttackRange:F0} interval={NpcAttackIntervalMs}ms spread={NpcAimInaccuracy:F3}");
+            }
+        }
     }
 
     public void LoadRemote(CharacterAndBattleframeVisuals remoteData)
@@ -806,21 +860,46 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         }
     }
 
-    public void ApplyDamage(int damage, IAptitudeTarget attacker, byte damageType)
+    public void ApplyDamage(int damage, IAptitudeTarget attacker, byte damageType,
+        DamageResponseFlags callerFlags = 0)
     {
         if (!Alive || CharacterState.State != CharacterStateData.CharacterStatus.Living)
         {
             return;
         }
 
-        int remaining = damage;
-        int shieldDelta = 0;
-        int healthDelta = 0;
+        // Apply resistance multiplier from DamageResponse profile
+        float multiplier = SDBInterface.GetDamageMultiplier(DamageResponseId, damageType);
+        int modifiedDamage = (int)(damage * multiplier);
+
+        if (multiplier != 1.0f)
+        {
+            Console.WriteLine($"[Combat] Entity {EntityId} DamageResponseId={DamageResponseId} type={damageType} mult={multiplier}: {damage} → {modifiedDamage}");
+        }
+
+        // Determine damage response flags
+        DamageResponseFlags flags = callerFlags;
+        if (multiplier > 1.0f)
+            flags |= DamageResponseFlags.Effective;
+        else if (multiplier > 0f && multiplier < 1.0f)
+            flags |= DamageResponseFlags.Resisted;
+        else if (multiplier <= 0f)
+            flags |= DamageResponseFlags.Immune;
+
+        // Immune — send feedback but don't apply damage
+        if (multiplier <= 0f)
+        {
+            SendHitEvents(0, attacker, damageType, flags);
+            Shard.EntityMan.FlushChanges(this);
+            return;
+        }
+
+        int remaining = modifiedDamage;
 
         // Shields absorb damage first
         if (CurrentShields > 0)
         {
-            shieldDelta = Math.Min(CurrentShields, remaining);
+            int shieldDelta = Math.Min(CurrentShields, remaining);
             remaining -= shieldDelta;
             SetShields(CurrentShields - shieldDelta, Shard.CurrentTime);
         }
@@ -828,10 +907,22 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         // Remaining damage hits health
         if (remaining > 0)
         {
-            healthDelta = Math.Min(CurrentHealth, remaining);
             SetHealth(CurrentHealth - remaining, Shard.CurrentTime);
         }
 
+        SendHitEvents(modifiedDamage, attacker, damageType, flags);
+        Shard.EntityMan.FlushChanges(this);
+
+        // Check for death
+        if (CurrentHealth <= 0)
+        {
+            Die(attacker);
+        }
+    }
+
+    private void SendHitEvents(int damage, IAptitudeTarget attacker, byte damageType,
+        DamageResponseFlags flags)
+    {
         // Send TookHit to the victim
         if (IsPlayerControlled)
         {
@@ -847,7 +938,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
                     DamageType = damageType
                 },
                 RepeatHitIdx = 0,
-                DamageFlags = 0,
+                DamageFlags = flags,
                 ShortTime = Shard.CurrentShortTime,
                 Unk2 = 0
             };
@@ -869,17 +960,9 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
                     DamageType = damageType
                 },
                 RepeatHitIdx = 0,
-                DamageFlags = 0
+                DamageFlags = flags
             };
             attackerChar.Player.NetChannels[ChannelType.ReliableGss].SendMessage(dealtHit, attackerChar.EntityId);
-        }
-
-        Shard.EntityMan.FlushChanges(this);
-
-        // Check for death
-        if (CurrentHealth <= 0)
-        {
-            Die(attacker);
         }
     }
 
@@ -1443,22 +1526,14 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
 
         float weaponAttributeSpread = 1f;
         float weaponAttributeRateOfFire = 1f;
-        try
+        if (weaponAttributesDict.TryGetValue((ushort)ItemAttributeId.WeaponSpread, out var spreadAttr))
         {
-            weaponAttributeSpread = weaponAttributesDict[(ushort)ItemAttributeId.WeaponSpread].Value;
-        }
-        catch (Exception)
-        {
-            Console.WriteLine($"Failed to get WeaponSpread Attribute");
+            weaponAttributeSpread = spreadAttr.Value;
         }
 
-        try
+        if (weaponAttributesDict.TryGetValue((ushort)ItemAttributeId.RateOfFire, out var rofAttr))
         {
-            weaponAttributeRateOfFire = weaponAttributesDict[(ushort)ItemAttributeId.RateOfFire].Value;
-        }
-        catch (Exception)
-        {
-            Console.WriteLine($"Failed to get RateOfFire Attribute");
+            weaponAttributeRateOfFire = rofAttr.Value;
         }
 
         // Calculate spread factor using Main even for Underbarrel, based on testing in-game.

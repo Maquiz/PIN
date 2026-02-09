@@ -246,7 +246,7 @@ public class AIEngine
                     npc.SetFireBurst(_shard.CurrentTime);
                     _shard.EntityMan.FlushChanges(npc);
 
-                    target.ApplyDamage(npc.NpcDamage, npc, 0);
+                    NpcFireWeapon(npc, target);
                 }
 
                 // Face target while attacking (stopped)
@@ -321,6 +321,8 @@ public class AIEngine
         return nearest;
     }
 
+    private const ulong RepathIntervalMs = 3000; // Re-calculate path every 3 seconds
+
     private void MoveNpc(CharacterEntity npc, Vector3 targetPos, float speed)
     {
         var direction = targetPos - npc.Position;
@@ -329,12 +331,58 @@ public class AIEngine
             return;
         }
 
-        direction = Vector3.Normalize(direction);
+        // Use pathfinding if NavGrid is available
+        if (_shard.NavGrid.IsBuilt)
+        {
+            // Re-path if no path, path completed, or re-path interval elapsed
+            ulong currentTime = _shard.CurrentTimeLong;
+            if (npc.NpcCurrentPath == null || npc.NpcPathIndex >= npc.NpcCurrentPath.Count ||
+                currentTime >= npc.NpcLastPathTime + RepathIntervalMs)
+            {
+                npc.NpcCurrentPath = _shard.NavGrid.FindPath(npc.Position, targetPos);
+                npc.NpcPathIndex = 0;
+                npc.NpcLastPathTime = currentTime;
+            }
+
+            // Follow path waypoints
+            if (npc.NpcCurrentPath != null && npc.NpcPathIndex < npc.NpcCurrentPath.Count)
+            {
+                var waypoint = npc.NpcCurrentPath[npc.NpcPathIndex];
+                float distToWaypoint = Vector3.Distance(npc.Position, waypoint);
+
+                // Advance to next waypoint if close enough
+                if (distToWaypoint < _shard.NavGrid.CellSize * 0.75f && npc.NpcPathIndex < npc.NpcCurrentPath.Count - 1)
+                {
+                    npc.NpcPathIndex++;
+                    waypoint = npc.NpcCurrentPath[npc.NpcPathIndex];
+                }
+
+                direction = waypoint - npc.Position;
+                if (direction.LengthSquared() < 0.01f) return;
+                direction = Vector3.Normalize(direction);
+            }
+            else
+            {
+                // No valid path — fall back to direct movement
+                direction = Vector3.Normalize(direction);
+            }
+        }
+        else
+        {
+            direction = Vector3.Normalize(direction);
+        }
+
         float moveDistance = speed * (AiTickIntervalMs / 1000.0f);
         float remainingDistance = Vector3.Distance(npc.Position, targetPos);
         moveDistance = Math.Min(moveDistance, remainingDistance);
 
         var newPos = npc.Position + (direction * moveDistance);
+
+        // Ground clamping
+        float? groundZ = _shard.Physics.SampleGroundHeight(newPos);
+        if (groundZ.HasValue)
+            newPos.Z = groundZ.Value;
+
         npc.SetPosition(newPos);
         npc.MovementState = unchecked((short)0x2004); // Running + Movement flag
         FaceTarget(npc, targetPos);
@@ -384,5 +432,64 @@ public class AIEngine
             float yaw = MathF.Atan2(direction.X, direction.Y);
             npc.Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, yaw);
         }
+    }
+
+    private static readonly Random _aimRng = new();
+
+    private void NpcFireWeapon(CharacterEntity npc, CharacterEntity target)
+    {
+        // Aim from NPC muzzle height toward target center-mass
+        var npcMuzzle = npc.Position + new Vector3(0, 0, npc.CollisionHeight * 0.7f);
+        var targetCenter = target.Position + new Vector3(0, 0, target.CollisionHeight * 0.5f);
+        var aimDir = Vector3.Normalize(targetCenter - npcMuzzle);
+
+        // Apply spread
+        aimDir = ApplyAimInaccuracy(aimDir, npc.NpcAimInaccuracy);
+
+        float range = npc.AttackRange;
+        byte damageType = npc.NpcAmmo?.Damagetype ?? 0;
+        var hit = _shard.Physics.ProjectileRayCast(npcMuzzle, aimDir, npc, 0, range);
+
+        if (hit.EntityId != 0 && hit.EntityId != npc.EntityId &&
+            _shard.Entities.TryGetValue(hit.EntityId, out var hitEntity) &&
+            hitEntity is CharacterEntity hitTarget && hitTarget.Alive)
+        {
+            bool headshot = IsHeadshot(hit.HitPosition, hitTarget);
+            float hsMult = headshot && npc.NpcWeaponTemplate != null ? Math.Max(npc.NpcWeaponTemplate.HeadshotMult, 1f) : 1f;
+            int finalDamage = (int)(npc.NpcDamage * hsMult);
+            AeroMessages.GSS.V66.DamageResponseFlags flags = headshot ? AeroMessages.GSS.V66.DamageResponseFlags.Critical : 0;
+
+            hitTarget.ApplyDamage(finalDamage, npc, damageType, flags);
+        }
+
+        // AoE splash
+        if (npc.NpcAmmo != null && npc.NpcAmmo.ImpactRadius > 0)
+        {
+            Vector3 impactPos = hit.HitAnything
+                ? hit.HitPosition
+                : npcMuzzle + aimDir * range;
+            _shard.ProjectileSim.ApplySplashDamage(impactPos, npc.NpcAmmo, npc.NpcDamage, damageType, npc);
+        }
+    }
+
+    private static bool IsHeadshot(Vector3 hitPos, CharacterEntity target)
+    {
+        float relativeZ = hitPos.Z - target.Position.Z;
+        return relativeZ >= target.CollisionHeight * 0.85f;
+    }
+
+    private static Vector3 ApplyAimInaccuracy(Vector3 direction, float maxAngleRad)
+    {
+        if (maxAngleRad <= 0f) return direction;
+
+        float angle = (float)(_aimRng.NextDouble() * maxAngleRad);
+        float rotation = (float)(_aimRng.NextDouble() * MathF.PI * 2f);
+
+        var up = MathF.Abs(direction.Z) < 0.99f ? Vector3.UnitZ : Vector3.UnitX;
+        var right = Vector3.Normalize(Vector3.Cross(direction, up));
+        var actualUp = Vector3.Cross(right, direction);
+
+        var offset = (right * MathF.Cos(rotation) + actualUp * MathF.Sin(rotation)) * MathF.Sin(angle);
+        return Vector3.Normalize(direction + offset);
     }
 }
