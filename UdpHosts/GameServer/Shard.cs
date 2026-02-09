@@ -38,17 +38,6 @@ public class Shard : IShard
         Encounters = new ConcurrentDictionary<ulong, IEncounter>();
         Outposts = new ConcurrentDictionary<uint, IDictionary<uint, OutpostEntity>>();
         Physics = new PhysicsEngine(this);
-
-        // Build navigation grid after physics collision is loaded
-        if (settings.LoadMapsCollision)
-        {
-            NavGrid = NavGrid.Build(Physics, System.Numerics.Vector3.Zero, 500f);
-        }
-        else
-        {
-            NavGrid = new NavGrid();
-        }
-
         AI = new AIEngine();
         AI.Init(this);
         Movement = new MovementRelay(this);
@@ -68,7 +57,6 @@ public class Shard : IShard
     public IDictionary<uint, IDictionary<uint, OutpostEntity>> Outposts { get; protected set; }
     public IDictionary<uint, INetworkPlayer> Clients { get; }
     public PhysicsEngine Physics { get; }
-    public NavGrid NavGrid { get; }
     public AIEngine AI { get; }
     public MovementRelay Movement { get; }
     public EntityManager EntityMan { get; }
@@ -113,7 +101,6 @@ public class Shard : IShard
         Abilities.Tick(deltaTime, currentTime, ct);
 
         WeaponSim.Tick(deltaTime, currentTime, ct);
-        ProjectileSim.Tick(deltaTime, currentTime, ct);
 
         return true;
     }

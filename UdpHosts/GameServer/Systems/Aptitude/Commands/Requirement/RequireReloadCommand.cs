@@ -26,13 +26,6 @@ public class RequireReloadCommand : Command, ICommand
             if (Params.Inittime == 1)
             {
                 result = character.Character_CombatView.WeaponReloadedProp > context.InitTime;
-                Console.WriteLine($"[RequireReload] ReloadedProp={character.Character_CombatView.WeaponReloadedProp} vs InitTime={context.InitTime} → raw={result}, Negate={Params.Negate}");
-            }
-            else
-            {
-                // Inittime=0: treat as "weapon has been reloaded" (always true — no time comparison)
-                result = true;
-                Console.WriteLine($"[RequireReload] Inittime=0, defaulting result=true, Negate={Params.Negate}");
             }
         }
         else

@@ -1,5 +1,4 @@
-using GameServer.Data.SDB.Records.aptfs;
-using GameServer.Entities.Character;
+﻿using GameServer.Data.SDB.Records.aptfs;
 
 namespace GameServer.Aptitude;
 
@@ -18,31 +17,18 @@ public class TargetHostilesCommand : Command, ICommand
         var previousTargets = context.Targets;
         var newTargets = new AptitudeTargets();
 
-        // Get initiator's faction for hostility comparison
-        byte selfFaction = 0;
-        if (context.Self is CharacterEntity selfChar)
-        {
-            selfFaction = selfChar.HostilityInfo.FactionId;
-        }
-
         foreach (var target in previousTargets)
         {
-            if (target == context.Self && Params.IncludeSelf == 0)
-                continue;
-            if (target == context.Initiator && Params.IncludeInitiator == 0)
-                continue;
-            if (target == context.Self.Owner && Params.IncludeOwner == 0)
-                continue;
-
-            // Filter to only hostile targets (different faction)
-            if (target is CharacterEntity targetChar)
+            // add  || (target is friendly)
+            if (
+                (target == context.Self && Params.IncludeSelf == 0)
+                || (target == context.Initiator && Params.IncludeInitiator == 0)
+                || (target == context.Self.Owner && Params.IncludeOwner == 0))
             {
-                byte targetFaction = targetChar.HostilityInfo.FactionId;
-                if (selfFaction != 0 && targetFaction != 0 && targetFaction == selfFaction)
-                    continue; // Same faction = friendly, skip
+                continue;
             }
 
-            newTargets.Push(target);
+            context.Targets.Push(target);
         }
 
         context.FormerTargets = previousTargets;

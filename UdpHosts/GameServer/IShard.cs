@@ -20,7 +20,6 @@ public interface IShard : IPacketSender
     IDictionary<ulong, IEncounter> Encounters { get; }
     IDictionary<uint, IDictionary<uint, OutpostEntity>> Outposts { get; }
     PhysicsEngine Physics { get; }
-    NavGrid NavGrid { get; }
     AIEngine AI { get; }
     MovementRelay Movement { get; }
     EntityManager EntityMan { get; }

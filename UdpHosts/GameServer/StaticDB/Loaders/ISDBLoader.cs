@@ -15,11 +15,7 @@ public interface ISDBLoader
     Dictionary<uint, Dictionary<byte, CharCreateLoadoutSlots>> LoadCharCreateLoadoutSlots();
     Dictionary<uint, Deployable> LoadDeployable();
     Dictionary<uint, Monster> LoadMonster();
-    Dictionary<byte, MonsterScaling> LoadMonsterScaling();
     Dictionary<uint, Turret> LoadTurret();
-    Dictionary<byte, DamageResponse> LoadDamageResponse();
-    Dictionary<byte, DamageType> LoadDamageType();
-    Dictionary<(byte response, byte damageType), DamageResponseDamageType> LoadDamageResponseDamageType();
 
     // dbvisualrecords
     Dictionary<uint, WarpaintPalette> LoadWarpaintPalettes();

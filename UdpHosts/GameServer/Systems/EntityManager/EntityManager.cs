@@ -63,18 +63,11 @@ public class EntityManager
         return ScopedPlayersByEntity.TryGetValue(entityId, out var players) && players.Contains(player);
     }
 
-    public CharacterEntity SpawnCharacter(uint typeId, Vector3 position, CharacterEntity owner = null, byte level = 1)
+    public CharacterEntity SpawnCharacter(uint typeId, Vector3 position, CharacterEntity owner = null)
     {
         var characterEntity = new CharacterEntity(Shard, Shard.GetNextGuid(), owner);
-        characterEntity.NpcLevel = level;
         characterEntity.LoadMonster(typeId);
         characterEntity.SetCharacterState(CharacterStateData.CharacterStatus.Living, Shard.CurrentTime);
-
-        // Ground-clamp spawn position
-        float? groundZ = Shard.Physics.SampleGroundHeight(position);
-        if (groundZ.HasValue)
-            position.Z = groundZ.Value;
-
         characterEntity.SetPosition(position);
         characterEntity.SpawnPosition = position;
         characterEntity.SetSpawnPose();

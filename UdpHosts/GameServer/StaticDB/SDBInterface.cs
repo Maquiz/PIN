@@ -17,11 +17,7 @@ public class SDBInterface
     private static Dictionary<uint, Dictionary<byte, CharCreateLoadoutSlots>> CharCreateLoadoutSlots;
     private static Dictionary<uint, Deployable> Deployable;
     private static Dictionary<uint, Monster> Monster;
-    private static Dictionary<byte, MonsterScaling> MonsterScaling;
     private static Dictionary<uint, Turret> Turret;
-    private static Dictionary<byte, DamageResponse> DamageResponse;
-    private static Dictionary<byte, DamageType> DamageType;
-    private static Dictionary<(byte response, byte damageType), DamageResponseDamageType> DamageResponseDamageType;
 
     // dbvisualrecords
     private static Dictionary<uint, WarpaintPalette> WarpaintPalettes;
@@ -250,11 +246,7 @@ public class SDBInterface
         CharCreateLoadoutSlots = loader.LoadCharCreateLoadoutSlots();
         Deployable = loader.LoadDeployable();
         Monster = loader.LoadMonster();
-        MonsterScaling = loader.LoadMonsterScaling();
         Turret = loader.LoadTurret();
-        DamageResponse = loader.LoadDamageResponse();
-        DamageType = loader.LoadDamageType();
-        DamageResponseDamageType = loader.LoadDamageResponseDamageType();
 
         // dbvisualrecords
         WarpaintPalettes = loader.LoadWarpaintPalettes();
@@ -513,21 +505,6 @@ public class SDBInterface
     public static Monster GetMonster(uint id) => Monster.GetValueOrDefault(id);
     public static Dictionary<uint, Monster> GetAllMonsters() => Monster;
     public static Turret GetTurret(uint id) => Turret.GetValueOrDefault(id);
-    public static MonsterScaling GetMonsterScaling(byte level) =>
-        MonsterScaling.GetValueOrDefault(level);
-    public static float GetDamageMultiplier(byte damageResponseId, byte damageTypeId)
-    {
-        // DamageResponseId=0 means no resistance profile (default for players and unset NPCs)
-        if (damageResponseId == 0)
-            return 1.0f;
-
-        var key = (damageResponseId, damageTypeId);
-        if (DamageResponseDamageType.TryGetValue(key, out var entry))
-            return entry.Multiplier;
-        if (DamageResponse.TryGetValue(damageResponseId, out var response))
-            return response.DefaultMultiplier;
-        return 1.0f;
-    }
 
     // dbvisaulrecords
     public static WarpaintPalette GetWarpaintPalette(uint id) => WarpaintPalettes.GetValueOrDefault(id);

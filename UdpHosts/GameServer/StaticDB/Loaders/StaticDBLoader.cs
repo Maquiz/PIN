@@ -55,37 +55,10 @@ public class StaticDBLoader : ISDBLoader
         .ToDictionary(row => row.Id);
     }
 
-    public Dictionary<byte, MonsterScaling> LoadMonsterScaling()
-    {
-        return LoadStaticDB<MonsterScaling>("dbcharacter::MonsterScaling")
-            .GroupBy(row => row.Level)
-            .ToDictionary(g => g.Key, g => g.Last());
-    }
-
     public Dictionary<uint, Turret> LoadTurret()
     {
         return LoadStaticDB<Turret>("dbcharacter::Turret")
             .ToDictionary(row => row.Id);
-    }
-
-    public Dictionary<byte, DamageResponse> LoadDamageResponse()
-    {
-        return LoadStaticDB<DamageResponse>("dbcharacter::DamageResponse")
-            .ToDictionary(row => row.Id);
-    }
-
-    public Dictionary<byte, DamageType> LoadDamageType()
-    {
-        return LoadStaticDB<DamageType>("dbcharacter::DamageType")
-            .ToDictionary(row => row.Id);
-    }
-
-    public Dictionary<(byte response, byte damageType), DamageResponseDamageType> LoadDamageResponseDamageType()
-    {
-        // There are duplicates in the SDB — use GroupBy/Last to handle them
-        return LoadStaticDB<DamageResponseDamageType>("dbcharacter::DamageResponseDamageType")
-            .GroupBy(row => (row.Damageresponse, row.Damagetype))
-            .ToDictionary(g => g.Key, g => g.Last());
     }
 
     public Dictionary<uint, WarpaintPalette> LoadWarpaintPalettes() 
