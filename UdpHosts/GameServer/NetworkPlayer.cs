@@ -79,8 +79,11 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
             Console.WriteLine($"Could not get character over GRPC, will use fallback");
         }
 
-        // Load inventory — try DB first, fall back to hardcoded defaults
-        Inventory = new CharacterInventory(AssignedShard, this, CharacterEntity, CharacterId);
+        // Load inventory — try DB first, fall back to hardcoded defaults.
+        // Persistence must use the full character guid (low byte 0xFE type tag);
+        // CharacterId has that byte stripped for entity registration and does
+        // not exist in webapi.Characters.
+        Inventory = new CharacterInventory(AssignedShard, this, CharacterEntity, characterId);
 
         bool loadedFromDb = false;
         try
@@ -104,7 +107,7 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
                 {
                     var seed = Inventory.BuildSeedData();
                     await GRPCService.SeedCharacterInventoryAsync(
-                        CharacterId, seed.items, seed.resources, seed.loadouts, seed.slots);
+                        characterId, seed.items, seed.resources, seed.loadouts, seed.slots);
                 }
                 catch (Exception ex)
                 {
