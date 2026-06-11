@@ -89,6 +89,7 @@ public class PhysicsEngine
         }
 
         float halfHeight = height * 0.5f;
+        Console.WriteLine($"[Physics] Entity {entity.EntityId} shape: radius={radius} height={height} type={shapeIndex.Type}");
         var pose = new RigidPose
         {
             Position = entity.Position + new Vector3(0, 0, halfHeight),

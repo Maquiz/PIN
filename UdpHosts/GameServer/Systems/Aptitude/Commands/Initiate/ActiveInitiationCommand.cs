@@ -6,11 +6,11 @@ using GameServer.Entities.Character;
 
 namespace GameServer.Aptitude;
 
-public class ActiveInitiationCommmand : Command, ICommand
+public class ActiveInitiationCommand : Command, ICommand
 {
     private ActiveInitiationCommandDef Params;
 
-    public ActiveInitiationCommmand(ActiveInitiationCommandDef par)
+    public ActiveInitiationCommand(ActiveInitiationCommandDef par)
     : base(par)
     {
         Params = par;
@@ -36,7 +36,7 @@ public class ActiveInitiationCommmand : Command, ICommand
                         GlobalCooldown_ReadyAgain_Time = context.InitTime + 300,
                     }
                 };
-                Console.WriteLine($"ActivateAbility {message.ActivatedAbilityId} at {message.ActivatedTime}");
+                Console.WriteLine($"[Ability] ActiveInitiation ability={message.ActivatedAbilityId} at {message.ActivatedTime}");
                 player.NetChannels[ChannelType.ReliableGss].SendMessage(message, character.EntityId);
             }
         }

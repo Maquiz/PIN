@@ -539,4 +539,16 @@ public class BaseController : Base
             player.Respawn();
         }
     }
+
+    [MessageID((byte)Commands.CollectLoot)]
+    public void CollectLoot(INetworkClient client, IPlayer player, ulong entityId, GamePacket packet)
+    {
+        var query = packet.Unpack<AeroMessages.GSS.V66.Character.Command.CollectLoot>();
+        if (query == null)
+        {
+            return;
+        }
+
+        client.AssignedShard.Loot.TryCollectLoot((INetworkPlayer)player, query.LootEntityID, query.LootSdbID);
+    }
 }

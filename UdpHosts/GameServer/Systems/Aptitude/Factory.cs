@@ -84,24 +84,24 @@ public class Factory
         // or have zero instances in SDB (for environment `both`) or BaseCommandDef (for environment `server`)
         switch ((CommandType)commandTypeRec.Id)
         {
-            // case CommandType.ActiveInitiation:
-            //     return new ActiveInitiationCommand();
+            case CommandType.ActiveInitiation:
+                return new ActiveInitiationCommand(new ActiveInitiationCommandDef { Id = commandId });
             case CommandType.ImpactApplyEffect:
                 return new ImpactApplyEffectCommand(SDBInterface.GetImpactApplyEffectCommandDef(commandId));
             case CommandType.InstantActivation:
                 return new InstantActivationCommand(SDBInterface.GetInstantActivationCommandDef(commandId));
-            // case CommandType.TargetFriendlies:
-            //     return new TargetFriendliesCommand(SDBInterface.GetTargetFriendliesCommandDef(commandId));
-            // case CommandType.TargetHostiles:
-            //     return new TargetHostilesCommand(SDBInterface.GetTargetHostilesCommandDef(commandId));
+            case CommandType.TargetFriendlies:
+                return new TargetFriendliesCommand(SDBInterface.GetTargetFriendliesCommandDef(commandId));
+            case CommandType.TargetHostiles:
+                return new TargetHostilesCommand(SDBInterface.GetTargetHostilesCommandDef(commandId));
             case CommandType.TargetPBAE:
                 return new TargetPBAECommand(SDBInterface.GetTargetPBAECommandDef(commandId));
             case CommandType.TargetSelf:
                 return new TargetSelfCommand(SDBInterface.GetTargetSelfCommandDef(commandId));
-            // case CommandType.TargetSingle:
-            //     return new TargetSingleCommand(SDBInterface.GetTargetSingleCommandDef(commandId));
-            // case CommandType.TimeCooldown:
-            //     return new TimeCooldownCommand(SDBInterface.GetTimeCooldownCommandDef(commandId));
+            case CommandType.TargetSingle:
+                return new TargetSingleCommand(SDBInterface.GetTargetSingleCommandDef(commandId));
+            case CommandType.TimeCooldown:
+                return new TimeCooldownCommand(SDBInterface.GetTimeCooldownCommandDef(commandId));
             // case CommandType.ImpactAura:
             //     Zero instances in BaseCommandDef
             case CommandType.ImpactRemoveEffect:
@@ -232,8 +232,8 @@ public class Factory
             //     return new SwitchWeaponCommand(SDBInterface.GetSwitchWeaponCommandDef(commandId));
             // case CommandType.StatRequirement:
             //     return new StatRequirementCommand(SDBInterface.GetStatRequirementCommandDef(commandId));
-            // case CommandType.ConsumeEnergy:
-            //     return new ConsumeEnergyCommand(SDBInterface.GetConsumeEnergyCommandDef(commandId));
+            case CommandType.ConsumeEnergy:
+                return new ConsumeEnergyCommand(SDBInterface.GetConsumeEnergyCommandDef(commandId));
             // case CommandType.TargetClassType:
             //     return new TargetClassTypeCommand(SDBInterface.GetTargetClassTypeCommandDef(commandId));
             case CommandType.TargetDifference:

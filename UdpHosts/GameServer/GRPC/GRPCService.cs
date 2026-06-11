@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using GameServer.GRPC.EventHandlers;
@@ -29,6 +30,61 @@ public static class GRPCService
     public static async Task<CharacterAndBattleframeVisuals> GetCharacterAndBattleframeVisualsAsync(long characterId)
     {
         return await _client.GetCharacterAndBattleframeVisualsAsync(new CharacterID { ID = characterId });
+    }
+
+    public static async Task<CharacterInventoryResp> GetCharacterInventoryAsync(long characterId)
+    {
+        return await _client.GetCharacterInventoryAsync(new CharacterID { ID = characterId });
+    }
+
+    public static async Task SaveInventoryItemAsync(ulong charGuid, long itemGuid, uint sdbId, uint subInventory, uint dynamicFlags, uint durability, uint[] modules)
+    {
+        var cmd = new Command();
+        cmd.SaveInventoryItem = new SaveInventoryItem
+        {
+            CharacterGuid = charGuid,
+            ItemGuid = itemGuid,
+            SdbId = sdbId,
+            SubInventory = subInventory,
+            DynamicFlags = dynamicFlags,
+            Durability = durability,
+        };
+        if (modules != null)
+        {
+            cmd.SaveInventoryItem.Modules.AddRange(modules);
+        }
+        await SendCommandAsync(cmd);
+    }
+
+    public static async Task SaveInventoryResourceAsync(ulong charGuid, uint sdbId, uint quantity, uint subInventory)
+    {
+        var cmd = new Command();
+        cmd.SaveInventoryResource = new SaveInventoryResource
+        {
+            CharacterGuid = charGuid,
+            SdbId = sdbId,
+            Quantity = quantity,
+            SubInventory = subInventory
+        };
+        await SendCommandAsync(cmd);
+    }
+
+    public static async Task SeedCharacterInventoryAsync(ulong charGuid,
+        IEnumerable<InventoryItemData> items,
+        IEnumerable<InventoryResourceData> resources,
+        IEnumerable<InventoryLoadoutData> loadouts,
+        IEnumerable<InventoryLoadoutSlotData> slots)
+    {
+        var cmd = new Command();
+        cmd.SeedCharacterInventory = new SeedCharacterInventory
+        {
+            CharacterGuid = charGuid,
+        };
+        cmd.SeedCharacterInventory.Items.AddRange(items);
+        cmd.SeedCharacterInventory.Resources.AddRange(resources);
+        cmd.SeedCharacterInventory.Loadouts.AddRange(loadouts);
+        cmd.SeedCharacterInventory.Slots.AddRange(slots);
+        await SendCommandAsync(cmd);
     }
 
     public static async Task SaveCharacterSessionDataAsync(ulong characterId, uint zoneId, uint outpostId, uint timePlayed)

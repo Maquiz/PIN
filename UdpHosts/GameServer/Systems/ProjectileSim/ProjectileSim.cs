@@ -45,9 +45,10 @@ public class ProjectileSim
         int damage = weaponDetails?.Weapon.DamagePerRound ?? 100;
         float headshotMult = weaponDetails?.Weapon.HeadshotMult ?? 1f;
         byte damageType = ammo?.Damagetype ?? 0;
+        float projectileSpeed = ammo?.ProjectileSpeed ?? 0f;
+        Console.WriteLine($"[Fire] weapon={weaponDetails?.Weapon.DebugName} dmg={damage} range={weaponRange} ammo={ammo?.Name} speed={projectileSpeed}");
 
         // Determine if this is a slow projectile (needs travel time simulation)
-        float projectileSpeed = ammo?.ProjectileSpeed ?? 0f;
         if (projectileSpeed > 0f && projectileSpeed < HitscanSpeedThreshold)
         {
             // Queue for ticked simulation

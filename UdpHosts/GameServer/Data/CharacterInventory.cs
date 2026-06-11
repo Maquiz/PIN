@@ -6,6 +6,8 @@ using AeroMessages.GSS.V66.Character.Event;
 using GameServer.Data.SDB;
 using GameServer.Entities.Character;
 using GameServer.Enums;
+using GameServer.GRPC;
+using GrpcGameServerAPIClient;
 using LoadoutVisualType = AeroMessages.GSS.V66.Character.LoadoutConfig_Visual.LoadoutVisualType;
 
 namespace GameServer.Data;
@@ -21,15 +23,17 @@ public class CharacterInventory
     private IShard _shard;
     private INetworkClient _player;
     private CharacterEntity _character;
+    private ulong _characterGuid;
 
-    public CharacterInventory(IShard shard, INetworkClient player, CharacterEntity character)
+    public CharacterInventory(IShard shard, INetworkClient player, CharacterEntity character, ulong characterGuid = 0)
     {
         _shard = shard;
         _player = player;
         _character = character;
+        _characterGuid = characterGuid;
         _items = new();
         _resources = new();
-        _loadouts = new();  
+        _loadouts = new();
     }
 
     public void LoadHardcodedInventory()
@@ -53,6 +57,174 @@ public class CharacterInventory
         {
             HardcodedCharacterData.GenerateCharCreateLoadoutAndItems(this, createId, chassisId);
         }
+    }
+
+    public bool LoadFromDb(CharacterInventoryResp data)
+    {
+        if (data == null || (data.Items.Count == 0 && data.Loadouts.Count == 0))
+        {
+            return false;
+        }
+
+        // Load items
+        foreach (var itemData in data.Items)
+        {
+            var item = new Item()
+            {
+                SdbId = itemData.SdbId,
+                GUID = (ulong)itemData.ItemGuid,
+                SubInventory = (byte)itemData.SubInventory,
+                Durability = (ushort)itemData.Durability,
+                DynamicFlags = (byte)itemData.DynamicFlags,
+                TimestampEpoch = (uint)DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                Modules = itemData.Modules.Select(m => (uint)m).ToArray(),
+                Unk1 = 0,
+                Unk3 = 0,
+                Unk4 = 0,
+                Unk5 = 0,
+                Unk6 = Array.Empty<ItemUnkData>(),
+                Unk7 = 0,
+            };
+
+            _items[item.GUID] = item;
+        }
+
+        // Load resources
+        foreach (var resData in data.Resources)
+        {
+            var resource = new Resource()
+            {
+                Quantity = resData.Quantity,
+                SdbId = resData.SdbId,
+                SubInventory = (byte)resData.SubInventory,
+                TextKey = string.Empty,
+                Unk2 = 0,
+            };
+
+            _resources[resData.SdbId] = resource;
+        }
+
+        // Build loadouts from loadout + slot data
+        var slotsByLoadout = data.Slots.GroupBy(s => s.LoadoutId).ToDictionary(g => g.Key, g => g.ToList());
+
+        foreach (var loData in data.Loadouts)
+        {
+            var pveItems = new List<LoadoutConfig_Item>();
+            var pvpItems = new List<LoadoutConfig_Item>();
+
+            if (slotsByLoadout.TryGetValue(loData.LoadoutId, out var slotsForLoadout))
+            {
+                foreach (var slot in slotsForLoadout)
+                {
+                    var configItem = new LoadoutConfig_Item { ItemGUID = (ulong)slot.ItemGuid, SlotIndex = (byte)slot.SlotIndex };
+                    if (slot.ConfigId == 0)
+                    {
+                        pveItems.Add(configItem);
+                    }
+                    else
+                    {
+                        pvpItems.Add(configItem);
+                    }
+                }
+            }
+
+            var loadout = new Loadout()
+            {
+                FrameLoadoutId = loData.LoadoutId,
+                ChassisID = loData.ChassisId,
+                LoadoutName = loData.LoadoutName,
+                LoadoutType = loData.LoadoutType,
+                LoadoutConfigs =
+                [
+                    new LoadoutConfig()
+                    {
+                        ConfigID = 0,
+                        ConfigName = "pve",
+                        Items = pveItems.ToArray(),
+                        Visuals = Array.Empty<LoadoutConfig_Visual>(),
+                        Perks = Array.Empty<uint>(),
+                        Unk1 = 0,
+                        PerkBandwidth = 0,
+                        PerkRespecLockRemainingSeconds = 0,
+                        HaveExtraData = 0
+                    },
+                    new LoadoutConfig()
+                    {
+                        ConfigID = 1,
+                        ConfigName = "pvp",
+                        Items = pvpItems.ToArray(),
+                        Visuals = Array.Empty<LoadoutConfig_Visual>(),
+                        Perks = Array.Empty<uint>(),
+                        Unk1 = 0,
+                        PerkBandwidth = 0,
+                        PerkRespecLockRemainingSeconds = 0,
+                        HaveExtraData = 0
+                    }
+                ]
+            };
+
+            _loadouts[(int)loadout.FrameLoadoutId] = loadout;
+        }
+
+        return true;
+    }
+
+    public (List<InventoryItemData> items, List<InventoryResourceData> resources, List<InventoryLoadoutData> loadouts, List<InventoryLoadoutSlotData> slots) BuildSeedData()
+    {
+        var items = new List<InventoryItemData>();
+        foreach (var (guid, item) in _items)
+        {
+            items.Add(new InventoryItemData
+            {
+                ItemGuid = (long)guid,
+                SdbId = item.SdbId,
+                SubInventory = item.SubInventory,
+                DynamicFlags = item.DynamicFlags,
+                Durability = (uint)item.Durability,
+                Modules = { item.Modules ?? Array.Empty<uint>() }
+            });
+        }
+
+        var resources = new List<InventoryResourceData>();
+        foreach (var (sdbId, res) in _resources)
+        {
+            resources.Add(new InventoryResourceData
+            {
+                SdbId = sdbId,
+                Quantity = res.Quantity,
+                SubInventory = res.SubInventory
+            });
+        }
+
+        var loadouts = new List<InventoryLoadoutData>();
+        var slots = new List<InventoryLoadoutSlotData>();
+        foreach (var (loadoutId, loadout) in _loadouts)
+        {
+            loadouts.Add(new InventoryLoadoutData
+            {
+                LoadoutId = loadoutId,
+                ChassisId = loadout.ChassisID,
+                LoadoutName = loadout.LoadoutName,
+                LoadoutType = loadout.LoadoutType
+            });
+
+            for (int configId = 0; configId < loadout.LoadoutConfigs.Length; configId++)
+            {
+                var config = loadout.LoadoutConfigs[configId];
+                foreach (var slotItem in config.Items)
+                {
+                    slots.Add(new InventoryLoadoutSlotData
+                    {
+                        LoadoutId = loadoutId,
+                        ConfigId = (uint)configId,
+                        SlotIndex = slotItem.SlotIndex,
+                        ItemGuid = (long)slotItem.ItemGUID
+                    });
+                }
+            }
+        }
+
+        return (items, resources, loadouts, slots);
     }
 
     public int GetLoadoutIdForChassis(uint chassisId)
@@ -150,6 +322,12 @@ public class CharacterInventory
         res.Quantity += quantity;
         _resources[sdbId] = res;
         SendResourceUpdate(sdbId);
+
+        // Persist to DB
+        if (_characterGuid != 0)
+        {
+            _ = GRPCService.SaveInventoryResourceAsync(_characterGuid, sdbId, res.Quantity, res.SubInventory);
+        }
     }
 
     public bool ConsumeResource(uint sdbId, uint cost)
@@ -178,6 +356,14 @@ public class CharacterInventory
             }
             
             SendResourceUpdate(sdbId);
+
+            // Persist to DB
+            if (_characterGuid != 0)
+            {
+                var current = _resources.TryGetValue(sdbId, out var r) ? r : default;
+                _ = GRPCService.SaveInventoryResourceAsync(_characterGuid, sdbId, current.Quantity, current.SubInventory);
+            }
+
             return true;
         }
     }
@@ -406,6 +592,19 @@ public class CharacterInventory
         }
 
         SendEquipmentChanges(changedOldItemGUID, changedNewItemGUID);
+
+        // Persist equipment changes to DB
+        if (_characterGuid != 0)
+        {
+            if (changedOldItemGUID != 0 && _items.TryGetValue(changedOldItemGUID, out var persistOld))
+            {
+                _ = GRPCService.SaveInventoryItemAsync(_characterGuid, (long)changedOldItemGUID, persistOld.SdbId, persistOld.SubInventory, persistOld.DynamicFlags, (uint)persistOld.Durability, persistOld.Modules);
+            }
+            if (changedNewItemGUID != 0 && _items.TryGetValue(changedNewItemGUID, out var persistNew))
+            {
+                _ = GRPCService.SaveInventoryItemAsync(_characterGuid, (long)changedNewItemGUID, persistNew.SdbId, persistNew.SubInventory, persistNew.DynamicFlags, (uint)persistNew.Durability, persistNew.Modules);
+            }
+        }
     }
     
     public void EquipVisualBySdbId(int loadoutId, LoadoutVisualType visual, LoadoutSlotType slot, uint sdb_id)

@@ -69,6 +69,9 @@ public class AIEngine
         _npcStates[npc.EntityId] = NpcAIState.Dead;
         _npcTargets.TryRemove(npc.EntityId, out _);
 
+        // Spawn loot drops
+        _shard.Loot.SpawnLootForNpc(npc, null);
+
         // Schedule entity removal after short delay (corpse time)
         _pendingRemovals.Enqueue((npc.EntityId, _shard.CurrentTimeLong + DespawnDelayMs));
 

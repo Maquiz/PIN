@@ -406,6 +406,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         // Set collision dimensions from SDB
         CollisionRadius = monsterInfo.BodyRadius > 0 ? monsterInfo.BodyRadius : 0.9f;
         CollisionHeight = monsterInfo.BodyHeight > 0 ? monsterInfo.BodyHeight : 1.8f;
+        Console.WriteLine($"[NPC] Monster type={typeId} radius={CollisionRadius} height={CollisionHeight} health={npcHealth}");
 
         // NPCs are alive when spawned
         Alive = true;
@@ -418,12 +419,22 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
             if (weaponInfo?.Main != null)
             {
                 NpcWeaponTemplate = weaponInfo.Main;
+                uint wpnRoundsPerBurst = NpcWeaponTemplate.RoundsPerBurst > 0 ? NpcWeaponTemplate.RoundsPerBurst : (uint)1;
                 if (NpcWeaponTemplate.DamagePerRound > 0)
-                    NpcDamage = NpcWeaponTemplate.DamagePerRound;
+                {
+                    // For burst weapons, total damage per attack = damage per round * rounds per burst
+                    NpcDamage = (int)(NpcWeaponTemplate.DamagePerRound * wpnRoundsPerBurst);
+                }
                 if (NpcWeaponTemplate.Range > 0)
                     AttackRange = NpcWeaponTemplate.Range;
                 if (NpcWeaponTemplate.MsPerBurst > 0)
-                    NpcAttackIntervalMs = NpcWeaponTemplate.MsPerBurst;
+                {
+                    // MsPerBurst is time between individual rounds in a burst (e.g. 65ms for auto weapons).
+                    // For NPC attack interval, compute the full burst duration + reload/gap time.
+                    uint burstDuration = NpcWeaponTemplate.MsPerBurst * wpnRoundsPerBurst;
+                    uint reloadTime = NpcWeaponTemplate.ReloadTime > 0 ? NpcWeaponTemplate.ReloadTime : 1000;
+                    NpcAttackIntervalMs = Math.Max(burstDuration + reloadTime, 1000);
+                }
                 if (NpcWeaponTemplate.AmmoId != 0)
                     NpcAmmo = SDBInterface.GetAmmo(NpcWeaponTemplate.AmmoId);
 
@@ -1218,6 +1229,7 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
 
     public void SetWeaponReloaded(uint time)
     {
+        Console.WriteLine($"[Reload] Entity {EntityId} weapon reloaded at {time}");
         Character_CombatView.WeaponReloadedProp = time;
     }
 

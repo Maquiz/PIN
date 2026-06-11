@@ -12,6 +12,7 @@ using GameServer.Entities.Outpost;
 using GameServer.Physics;
 using GameServer.Systems.Chat;
 using GameServer.Systems.Encounters;
+using GameServer.Systems.Loot;
 using Shared.Common;
 using Shared.Udp;
 
@@ -59,6 +60,7 @@ public class Shard : IShard
         ProjectileSim = new ProjectileSim(this);
         Chat = new ChatService(this);
         Admin = new AdminService(this);
+        Loot = new LootService(this);
         EntityRefMap = new ConcurrentDictionary<ushort, Tuple<IEntity, Enums.GSS.Controllers>>();
     }
 
@@ -78,6 +80,7 @@ public class Shard : IShard
     public WeaponSim WeaponSim { get; }
     public ChatService Chat { get; }
     public AdminService Admin { get; }
+    public LootService Loot { get; }
     public ulong InstanceId { get; }
     public uint ZoneId { get; private set; }
     public ulong CurrentTimeLong { get; private set; }
@@ -114,6 +117,7 @@ public class Shard : IShard
 
         WeaponSim.Tick(deltaTime, currentTime, ct);
         ProjectileSim.Tick(deltaTime, currentTime, ct);
+        Loot.Tick(deltaTime, currentTime, ct);
 
         return true;
     }

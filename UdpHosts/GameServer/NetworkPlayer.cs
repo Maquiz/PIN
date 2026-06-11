@@ -2,6 +2,7 @@
 using System.Net;
 using System.Numerics;
 using System.Threading;
+using System.Threading.Tasks;
 using AeroMessages.GSS.V66;
 using AeroMessages.GSS.V66.Character;
 using AeroMessages.GSS.V66.Character.Controller;
@@ -78,9 +79,39 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
             Console.WriteLine($"Could not get character over GRPC, will use fallback");
         }
 
-        // Load inventory so we get loadouts
-        Inventory = new CharacterInventory(AssignedShard, this, CharacterEntity);
-        Inventory.LoadHardcodedInventory();
+        // Load inventory — try DB first, fall back to hardcoded defaults
+        Inventory = new CharacterInventory(AssignedShard, this, CharacterEntity, CharacterId);
+
+        bool loadedFromDb = false;
+        try
+        {
+            var invData = await GRPCService.GetCharacterInventoryAsync((long)characterId);
+            loadedFromDb = Inventory.LoadFromDb(invData);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Could not load inventory from DB: {ex.Message}");
+        }
+
+        if (!loadedFromDb)
+        {
+            Inventory.LoadHardcodedInventory();
+
+            // Seed to DB for next login (fire-and-forget)
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var seed = Inventory.BuildSeedData();
+                    await GRPCService.SeedCharacterInventoryAsync(
+                        CharacterId, seed.items, seed.resources, seed.loadouts, seed.slots);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to seed inventory to DB: {ex.Message}");
+                }
+            });
+        }
 
         // Use remote data or fallback to setup character
         bool useRemoteData = true;
@@ -88,8 +119,6 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         if (remoteData != null && useRemoteData)
         {
             CharacterEntity.LoadRemote(remoteData);
-
-            // Todo: load inventory from db so we can use those loadouts
             loadoutId = Inventory.GetLoadoutIdForChassis(remoteData.CharacterInfo.CurrentBattleframeSDBId);
         }
         else

@@ -7,6 +7,7 @@ using GameServer.Entities.Outpost;
 using GameServer.Physics;
 using GameServer.Systems.Chat;
 using GameServer.Systems.Encounters;
+using GameServer.Systems.Loot;
 using Serilog;
 using Shared.Udp;
 
@@ -30,6 +31,7 @@ public interface IShard : IPacketSender
     WeaponSim WeaponSim { get; }
     ChatService Chat { get; }
     AdminService Admin { get; }
+    LootService Loot { get; }
     uint ZoneId { get; }
     ILogger Logger { get; }
 

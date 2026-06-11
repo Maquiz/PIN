@@ -98,10 +98,66 @@ message CharacterVisualsUpdated {
    uint64 CharacterGuid = 1;
    CharacterAndBattleframeVisuals CharacterAndBattleframeVisuals = 2;
 }
+message InventoryItemData {
+   int64 ItemGuid = 1;
+   uint32 SdbId = 2;
+   uint32 SubInventory = 3;
+   uint32 DynamicFlags = 4;
+   uint32 Durability = 5;
+   repeated uint32 Modules = 6;
+}
+message InventoryResourceData {
+   uint32 SdbId = 1;
+   uint32 Quantity = 2;
+   uint32 SubInventory = 3;
+}
+message InventoryLoadoutData {
+   int32 LoadoutId = 1;
+   uint32 ChassisId = 2;
+   string LoadoutName = 3;
+   string LoadoutType = 4;
+}
+message InventoryLoadoutSlotData {
+   int32 LoadoutId = 1;
+   uint32 ConfigId = 2;
+   uint32 SlotIndex = 3;
+   int64 ItemGuid = 4;
+}
+message CharacterInventoryResp {
+   repeated InventoryItemData Items = 1;
+   repeated InventoryResourceData Resources = 2;
+   repeated InventoryLoadoutData Loadouts = 3;
+   repeated InventoryLoadoutSlotData Slots = 4;
+}
+message SaveInventoryItem {
+   uint64 CharacterGuid = 1;
+   int64 ItemGuid = 2;
+   uint32 SdbId = 3;
+   uint32 SubInventory = 4;
+   uint32 DynamicFlags = 5;
+   uint32 Durability = 6;
+   repeated uint32 Modules = 7;
+}
+message SaveInventoryResource {
+   uint64 CharacterGuid = 1;
+   uint32 SdbId = 2;
+   uint32 Quantity = 3;
+   uint32 SubInventory = 4;
+}
+message SeedCharacterInventory {
+   uint64 CharacterGuid = 1;
+   repeated InventoryItemData Items = 2;
+   repeated InventoryResourceData Resources = 3;
+   repeated InventoryLoadoutData Loadouts = 4;
+   repeated InventoryLoadoutSlotData Slots = 5;
+}
 message Command {
    oneof subtype {
       SaveGameSessionData SaveGameSessionData = 1;
       SaveLgvRaceFinish SaveLgvRaceFinish = 2;
+      SaveInventoryItem SaveInventoryItem = 3;
+      SaveInventoryResource SaveInventoryResource = 4;
+      SeedCharacterInventory SeedCharacterInventory = 5;
    }
 }
 message Event {
@@ -172,6 +228,7 @@ message WebIdValueColorId {
 }
 service GameServerAPI {
    rpc GetCharacterAndBattleframeVisuals (CharacterID) returns (CharacterAndBattleframeVisuals);
+   rpc GetCharacterInventory (CharacterID) returns (CharacterInventoryResp);
    rpc Ping (PingReq) returns (PingResp);
    rpc Stream (stream Command) returns (stream Event);
 }
