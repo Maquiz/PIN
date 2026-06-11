@@ -650,6 +650,9 @@ public class CharacterInventory
             {
                 _ = GRPCService.SaveInventoryItemAsync(_characterGuid, (long)changedNewItemGUID, persistNew.SdbId, persistNew.SubInventory, persistNew.DynamicFlags, (uint)persistNew.Durability, persistNew.Modules);
             }
+
+            // Persist the slot mapping itself; itemGuid 0 clears the slot.
+            _ = GRPCService.SaveLoadoutSlotAsync(_characterGuid, loadoutId, 0, (byte)slot, (long)guid);
         }
     }
     

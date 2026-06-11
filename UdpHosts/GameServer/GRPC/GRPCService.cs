@@ -80,6 +80,20 @@ public static class GRPCService
         await SendCommandAsync(cmd);
     }
 
+    public static async Task SaveLoadoutSlotAsync(ulong charGuid, int loadoutId, uint configId, uint slotIndex, long itemGuid)
+    {
+        var cmd = new Command();
+        cmd.SaveLoadoutSlot = new SaveLoadoutSlot
+        {
+            CharacterGuid = charGuid,
+            LoadoutId = loadoutId,
+            ConfigId = configId,
+            SlotIndex = slotIndex,
+            ItemGuid = itemGuid
+        };
+        await SendCommandAsync(cmd);
+    }
+
     public static async Task SeedCharacterInventoryAsync(ulong charGuid,
         IEnumerable<InventoryItemData> items,
         IEnumerable<InventoryResourceData> resources,
