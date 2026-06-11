@@ -299,7 +299,53 @@ public class CharacterInventory
 
         _items.Add(guid, item);
         SendItemUpdate(guid);
+
+        // Persist to DB
+        if (_characterGuid != 0)
+        {
+            _ = GRPCService.SaveInventoryItemAsync(_characterGuid, (long)guid, item.SdbId, item.SubInventory, item.DynamicFlags, (uint)item.Durability, item.Modules);
+        }
+
         return guid;
+    }
+
+    /// <summary>
+    /// Removes an item from the inventory (salvage/delete) and persists the
+    /// deletion. Returns false if the guid is not in this inventory.
+    /// </summary>
+    public bool RemoveItem(ulong guid)
+    {
+        if (!_items.Remove(guid, out var removed))
+        {
+            return false;
+        }
+
+        // No partial-update message exists for removal; resync the full
+        // inventory with ClearExistingData so the client drops the item.
+        SendFullInventory();
+
+        if (_characterGuid != 0)
+        {
+            _ = GRPCService.DeleteInventoryItemAsync(_characterGuid, (long)guid);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Finds the guid of the first unequipped item with the given sdb id, or 0.
+    /// </summary>
+    public ulong FindItemGuidBySdbId(uint sdbId)
+    {
+        foreach (var (guid, item) in _items)
+        {
+            if (item.SdbId == sdbId)
+            {
+                return guid;
+            }
+        }
+
+        return 0;
     }
 
     public void AddResource(uint sdbId, uint quantity)

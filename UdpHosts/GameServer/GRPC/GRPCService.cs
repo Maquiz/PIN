@@ -69,6 +69,17 @@ public static class GRPCService
         await SendCommandAsync(cmd);
     }
 
+    public static async Task DeleteInventoryItemAsync(ulong charGuid, long itemGuid)
+    {
+        var cmd = new Command();
+        cmd.DeleteInventoryItem = new DeleteInventoryItem
+        {
+            CharacterGuid = charGuid,
+            ItemGuid = itemGuid
+        };
+        await SendCommandAsync(cmd);
+    }
+
     public static async Task SeedCharacterInventoryAsync(ulong charGuid,
         IEnumerable<InventoryItemData> items,
         IEnumerable<InventoryResourceData> resources,

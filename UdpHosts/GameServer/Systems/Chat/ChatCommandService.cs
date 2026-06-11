@@ -45,8 +45,10 @@ public class ChatCommandService
         }
         else
         {
-            Console.WriteLine($"Unknown command: {commandName}");
-            sourcePlayer?.SendDebugChat($"Unknown command: {commandName}");
+            // Fall through to admin server commands (createitem, deleteitem,
+            // teleport, ...) so they are reachable from regular /-chat, not
+            // only the Admin channel. AdminService reports unknown commands.
+            _shard.Admin.ExecuteCommand(input, sourcePlayer);
         }
     }
 

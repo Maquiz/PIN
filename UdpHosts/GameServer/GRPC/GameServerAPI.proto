@@ -151,6 +151,10 @@ message SeedCharacterInventory {
    repeated InventoryLoadoutData Loadouts = 4;
    repeated InventoryLoadoutSlotData Slots = 5;
 }
+message DeleteInventoryItem {
+   uint64 CharacterGuid = 1;
+   int64 ItemGuid = 2;
+}
 message Command {
    oneof subtype {
       SaveGameSessionData SaveGameSessionData = 1;
@@ -158,6 +162,7 @@ message Command {
       SaveInventoryItem SaveInventoryItem = 3;
       SaveInventoryResource SaveInventoryResource = 4;
       SeedCharacterInventory SeedCharacterInventory = 5;
+      DeleteInventoryItem DeleteInventoryItem = 6;
    }
 }
 message Event {
