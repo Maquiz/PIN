@@ -130,7 +130,7 @@ public class AIEngine
 
     private static bool IsHostileFaction(uint factionId)
     {
-        return HardcodedCharacterData.HostileFactionIds.Contains(factionId);
+        return FactionRelations.HostileFactionIds.Contains(factionId);
     }
 
     private void ProcessRemovals(ulong currentTime)

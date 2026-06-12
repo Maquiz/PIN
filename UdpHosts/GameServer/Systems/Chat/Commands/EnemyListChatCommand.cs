@@ -34,7 +34,7 @@ public class EnemyListChatCommand : ChatCommand
             return;
         }
 
-        var hostileIds = HardcodedCharacterData.HostileFactionIds;
+        var hostileIds = FactionRelations.HostileFactionIds;
         var filtered = hostileOnly
             ? monsters.Where(m => hostileIds.Contains(m.Value.FactionId))
             : monsters.AsEnumerable();

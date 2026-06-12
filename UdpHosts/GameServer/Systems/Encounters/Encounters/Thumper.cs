@@ -54,7 +54,7 @@ public class Thumper : BaseEncounter, IInteractionHandler
             return;
         }
 
-        var hostileIds = HardcodedCharacterData.HostileFactionIds;
+        var hostileIds = FactionRelations.HostileFactionIds;
         var hostiles = allMonsters
             .Where(m => hostileIds.Contains(m.Value.FactionId) && m.Value.ChassisId != 0)
             .Select(m => m.Key)

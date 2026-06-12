@@ -28,7 +28,7 @@ public sealed class OutpostEntity : BaseEntity
     public ScopeBubbleInfoData ScopeBubbleInfo { get; set; }
 
     public SpawnPoint RandomSpawnPoint => SpawnPoints[Rng.Next(SpawnPoints.Count)];
-    public bool IsCapturedByHostiles => HardcodedCharacterData.HostileFactionIds.Contains(Outpost_ObserverView.FactionIdProp);
+    public bool IsCapturedByHostiles => FactionRelations.HostileFactionIds.Contains(Outpost_ObserverView.FactionIdProp);
     private List<SpawnPoint> SpawnPoints { get; set; } = new();
 
     private void InitFields()

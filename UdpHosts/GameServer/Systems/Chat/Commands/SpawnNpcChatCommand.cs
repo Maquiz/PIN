@@ -48,6 +48,6 @@ public class SpawnNpcChatCommand : ChatCommand
         var spawnPos = character.Position + (forward * 30f);
         var npc = context.Shard.EntityMan.SpawnCharacter(typeId, spawnPos);
         var monster = SDBInterface.GetMonster(typeId);
-        SourceFeedback($"Spawned NPC {typeId} (faction:{monster.FactionId}) 30m ahead. Hostile={Data.HardcodedCharacterData.HostileFactionIds.Contains(monster.FactionId)}", context);
+        SourceFeedback($"Spawned NPC {typeId} (faction:{monster.FactionId}) 30m ahead. Hostile={Data.FactionRelations.HostileFactionIds.Contains(monster.FactionId)}", context);
     }
 }
