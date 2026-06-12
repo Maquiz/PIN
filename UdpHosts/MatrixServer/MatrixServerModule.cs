@@ -1,4 +1,5 @@
-﻿using Autofac;
+﻿using System.Configuration;
+using Autofac;
 using Serilog;
 using Shared.Common;
 
@@ -15,7 +16,27 @@ public class MatrixServerModule : Module
 
     private static void RegisterTypes(ContainerBuilder builder)
     {
-        builder.RegisterType<MatrixServerSettings>().SingleInstance();
+        builder.Register(_ =>
+        {
+            var settings = new MatrixServerSettings();
+
+            if (ConfigurationManager.AppSettings["Port"] != null)
+            {
+                settings.Port = ushort.Parse(ConfigurationManager.AppSettings["Port"]);
+            }
+
+            if (ConfigurationManager.AppSettings["GameServerId"] != null)
+            {
+                settings.GameServerId = ushort.Parse(ConfigurationManager.AppSettings["GameServerId"]);
+            }
+
+            if (ConfigurationManager.AppSettings["GameServerPort"] != null)
+            {
+                settings.GameServerPort = ushort.Parse(ConfigurationManager.AppSettings["GameServerPort"]);
+            }
+
+            return settings;
+        }).SingleInstance();
         builder.RegisterType<MatrixServer>();
     }
 

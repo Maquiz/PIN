@@ -8,10 +8,13 @@ namespace MatrixServer;
 
 internal class MatrixServer : PacketServer
 {
+    private readonly MatrixServerSettings _settings;
+
     public MatrixServer(MatrixServerSettings matrixServerSettings,
                         ILogger logger)
         : base(matrixServerSettings.Port, logger)
     {
+        _settings = matrixServerSettings;
     }
 
     protected override void HandlePacket(Packet packet, CancellationToken ct)
@@ -39,7 +42,7 @@ internal class MatrixServer : PacketServer
             case "KISS": // KISS
                 Deserializer.ReadStruct<MatrixPacketKiss>(mem);
                 Logger.Verbose("[KISS]");
-                _ = SendAsync(Serializer.WriteStruct(new MatrixPacketHugg(1, 25001)), packet.RemoteEndpoint);
+                _ = SendAsync(Serializer.WriteStruct(new MatrixPacketHugg(_settings.GameServerId, _settings.GameServerPort)), packet.RemoteEndpoint);
                 break;
             case "ABRT": // ABRT
                 Deserializer.ReadStruct<MatrixPacketAbrt>(mem);
