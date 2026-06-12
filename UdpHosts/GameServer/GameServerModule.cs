@@ -79,6 +79,18 @@ public class GameServerModule : Module
                 }
             }
 
+            if (ConfigurationManager.AppSettings["AllowHardcodedFallback"] != null)
+            {
+                if (bool.TryParse(ConfigurationManager.AppSettings["AllowHardcodedFallback"], out bool value))
+                {
+                    settings.AllowHardcodedFallback = value;
+                }
+                else
+                {
+                    Console.WriteLine($"Cannot parse AllowHardcodedFallback setting value");
+                }
+            }
+
             return settings;
         })
         .As<GameServerSettings>().SingleInstance();

@@ -35,6 +35,7 @@ public interface IShard : IPacketSender
     LootService Loot { get; }
     uint ZoneId { get; }
     ILogger Logger { get; }
+    GameServerSettings Settings { get; }
 
     int CurrentPlayers => Clients.Count;
 

@@ -85,16 +85,26 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         }
         catch
         {
-            Console.WriteLine($"Could not get character over GRPC, will use fallback");
+            if (!AssignedShard.Settings.AllowHardcodedFallback)
+            {
+                Logger.Error("Refusing login for character 0x{0:X16}: RIN is unreachable over gRPC. Set AllowHardcodedFallback=true in App.config to allow the dev fallback character.", characterId);
+                RefuseLogin();
+                return;
+            }
+
+            Logger.Warning("Could not get character over gRPC, using the hardcoded DEV fallback (AllowHardcodedFallback=true)");
         }
 
-        // Load inventory — try DB first, fall back to hardcoded defaults.
+        // Load inventory from the DB. An empty result means a new character (seed
+        // below); a failed call means RIN broke mid-login and playing on would
+        // diverge the player from their DB state.
         // Persistence must use the full character guid (low byte 0xFE type tag);
         // CharacterId has that byte stripped for entity registration and does
         // not exist in webapi.Characters.
         Inventory = new CharacterInventory(AssignedShard, this, CharacterEntity, characterId);
 
         bool loadedFromDb = false;
+        bool inventoryFetchFailed = false;
         try
         {
             var invData = await GRPCService.GetCharacterInventoryAsync((long)characterId);
@@ -102,7 +112,15 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         }
         catch (Exception ex)
         {
+            inventoryFetchFailed = true;
             Console.WriteLine($"Could not load inventory from DB: {ex.Message}");
+        }
+
+        if (inventoryFetchFailed && !AssignedShard.Settings.AllowHardcodedFallback)
+        {
+            Logger.Error("Refusing login for character 0x{0:X16}: inventory could not be loaded from RIN.", characterId);
+            RefuseLogin();
+            return;
         }
 
         if (!loadedFromDb)
@@ -171,6 +189,13 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         Logger.Verbose("Zone {0} Outpost {1}", zoneId, outpostId);
 
         EnterZone(zone, outpostId);
+    }
+
+    private void RefuseLogin()
+    {
+        CharacterEntity = null;
+        var resp = new AeroMessages.Control.CloseConnection { Unk = new byte[] { 0, 0, 0, 0 } };
+        NetChannels[ChannelType.Control].SendMessage(resp);
     }
 
     public void EnterZoneAck()

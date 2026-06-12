@@ -46,4 +46,11 @@ public class GameServerSettings
     ///    Enable loading entities on zone startup
     /// </summary>
     public bool LoadZoneEntities { get; set; } = true;
+
+    /// <summary>
+    ///    DEV ONLY: when RIN is unreachable, log in with the hardcoded fallback
+    ///    character/inventory instead of refusing the login. Off by default so a
+    ///    broken gRPC link can't silently diverge players from their DB state.
+    /// </summary>
+    public bool AllowHardcodedFallback { get; set; } = false;
 }
