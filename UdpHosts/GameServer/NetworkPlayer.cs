@@ -55,14 +55,23 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         var guid = characterId & 0xffffffffffffff00;
         CharacterId = guid;
 
-        // Don't crash if they are already logged in
+        // If this character is already zoned in (e.g. the previous client was
+        // killed and never sent CloseConnection), evict the stale session and
+        // let this login proceed.
         AssignedShard.Entities.TryGetValue(CharacterId, out var existing);
         if (existing != null)
         {
-            Console.WriteLine($"Closing login because entity with this id is already zoned in");
-            var resp = new AeroMessages.Control.CloseConnection { Unk = new byte[] { 0, 0, 0, 0 } };
-            NetChannels[ChannelType.Control].SendMessage(resp);
-            return;
+            Console.WriteLine($"Character {CharacterId:X16} is already zoned in, evicting the stale session");
+            if (existing is CharacterEntity { Player: not null } staleCharacter && staleCharacter.Player != this)
+            {
+                AssignedShard.MigrateOut(staleCharacter.Player);
+            }
+
+            // MigrateOut is a no-op if the stale socket is already gone from Clients
+            if (AssignedShard.Entities.ContainsKey(CharacterId))
+            {
+                AssignedShard.EntityMan.Remove(CharacterId);
+            }
         }
 
         // Begin setting up player character
@@ -201,6 +210,11 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
 
     private void RespawnInternal()
     {
+        // The client handles this message sequence fine at zone-in (state Living), but when
+        // it has seen the Dead state it needs a full re-init of its own character afterwards,
+        // mirroring zone-in — see ResyncOwnCharacter below.
+        bool wasDead = CharacterEntity.CharacterState.State == CharacterStateData.CharacterStatus.Dead;
+
         SpawnPoint spawnPoint;
         try
         {
@@ -264,6 +278,12 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         };
         NetChannels[ChannelType.ReliableGss].SendChanges(baseController, CharacterEntity.EntityId);
 
+        if (wasDead)
+        {
+            Console.WriteLine("[Respawn] Respawning from Dead state, resyncing own character keyframes");
+            ResyncOwnCharacter();
+        }
+
         // Re-apply jetpack fx (hack until we hook up item effects)
         CharacterEntity.AddEffect(AssignedShard.Abilities.Factory.LoadEffect(986), new Aptitude.Context(AssignedShard, CharacterEntity)
         {
@@ -288,7 +308,49 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
         Inventory.SendFullInventory();
         Inventory.EnablePartialUpdates = true;
 
+        AssignedShard.Physics.UpdateEntity(CharacterEntity);
         CharacterEntity.Alive = true; // Accept MovementInputs only after Respawn
+    }
+
+    /// <summary>
+    ///     Re-sends the own character's controller and view keyframes plus CharacterLoaded,
+    ///     the same sequence EntityManager.ScopeIn sends at zone-in. A client that has been
+    ///     in the Dead state ignores the incremental respawn updates and stays on the death
+    ///     screen; a full re-init is the sequence it is known to accept.
+    /// </summary>
+    private void ResyncOwnCharacter()
+    {
+        var character = CharacterEntity;
+        var entityId = character.EntityId;
+        var reliable = NetChannels[ChannelType.ReliableGss];
+
+        if (character.Character_BaseController != null
+            && character.Character_CombatController != null
+            && character.Character_MissionAndMarkerController != null
+            && character.Character_LocalEffectsController != null)
+        {
+            reliable.SendControllerKeyframe(character.Character_BaseController, entityId, PlayerId);
+            reliable.SendControllerKeyframe(character.Character_CombatController, entityId, PlayerId);
+            reliable.SendControllerKeyframe(character.Character_LocalEffectsController, entityId, PlayerId);
+            reliable.SendControllerKeyframe(character.Character_MissionAndMarkerController, entityId, PlayerId);
+            reliable.SendMessage(new CharacterLoaded(), entityId);
+        }
+
+        if (character.Character_ObserverView != null
+            && character.Character_EquipmentView != null
+            && character.Character_CombatView != null
+            && character.Character_MovementView != null)
+        {
+            reliable.SendViewKeyframe(character.Character_ObserverView, entityId);
+            reliable.SendViewKeyframe(character.Character_EquipmentView, entityId);
+            reliable.SendViewKeyframe(character.Character_CombatView, entityId);
+            reliable.SendViewKeyframe(character.Character_MovementView, entityId);
+        }
+
+        if (character.Character_TinyObjectView != null)
+        {
+            reliable.SendViewKeyframe(character.Character_TinyObjectView, entityId);
+        }
     }
 
     public void Ready()
