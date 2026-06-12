@@ -14,25 +14,33 @@ public class MatrixServerModule : Module
         base.Load(builder);
     }
 
+    /// <summary>
+    ///     Setting lookup: MATRIXSERVER_* environment variable wins over App.config.
+    /// </summary>
+    private static string GetSetting(string key)
+    {
+        return System.Environment.GetEnvironmentVariable($"MATRIXSERVER_{key.ToUpperInvariant()}") ?? ConfigurationManager.AppSettings[key];
+    }
+
     private static void RegisterTypes(ContainerBuilder builder)
     {
         builder.Register(_ =>
         {
             var settings = new MatrixServerSettings();
 
-            if (ConfigurationManager.AppSettings["Port"] != null)
+            if (GetSetting("Port") != null)
             {
-                settings.Port = ushort.Parse(ConfigurationManager.AppSettings["Port"]);
+                settings.Port = ushort.Parse(GetSetting("Port"));
             }
 
-            if (ConfigurationManager.AppSettings["GameServerId"] != null)
+            if (GetSetting("GameServerId") != null)
             {
-                settings.GameServerId = ushort.Parse(ConfigurationManager.AppSettings["GameServerId"]);
+                settings.GameServerId = ushort.Parse(GetSetting("GameServerId"));
             }
 
-            if (ConfigurationManager.AppSettings["GameServerPort"] != null)
+            if (GetSetting("GameServerPort") != null)
             {
-                settings.GameServerPort = ushort.Parse(ConfigurationManager.AppSettings["GameServerPort"]);
+                settings.GameServerPort = ushort.Parse(GetSetting("GameServerPort"));
             }
 
             return settings;

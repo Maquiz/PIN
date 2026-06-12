@@ -24,39 +24,48 @@ public class GameServerModule : Module
         builder.RegisterType<GameServer>();
     }
 
+    /// <summary>
+    ///     Setting lookup: GAMESERVER_* environment variable wins over App.config.
+    ///     Lets containerized/production deployments configure without editing files.
+    /// </summary>
+    private static string GetSetting(string key)
+    {
+        return Environment.GetEnvironmentVariable($"GAMESERVER_{key.ToUpperInvariant()}") ?? ConfigurationManager.AppSettings[key];
+    }
+
     private static void RegisterInstances(ContainerBuilder builder)
     {
         builder.Register(ctx =>
         {
             var settings = new GameServerSettings();
 
-            if (ConfigurationManager.AppSettings["Port"] != null)
+            if (GetSetting("Port") != null)
             {
-                settings.Port = ushort.Parse(ConfigurationManager.AppSettings["Port"]);
+                settings.Port = ushort.Parse(GetSetting("Port"));
             }
 
-            if (ConfigurationManager.AppSettings["GrpcChannelAddress"] != null)
+            if (GetSetting("GrpcChannelAddress") != null)
             {
-                settings.GrpcChannelAddress = ConfigurationManager.AppSettings["GrpcChannelAddress"];
+                settings.GrpcChannelAddress = GetSetting("GrpcChannelAddress");
             }
 
-            if (ConfigurationManager.AppSettings["StaticDBPath"] != null)
+            if (GetSetting("StaticDBPath") != null)
             {
-                settings.StaticDBPath = ConfigurationManager.AppSettings["StaticDBPath"];
+                settings.StaticDBPath = GetSetting("StaticDBPath");
             }
 
-            if (ConfigurationManager.AppSettings["ZoneId"] != null)
+            if (GetSetting("ZoneId") != null)
             {
-                settings.ZoneId = uint.Parse(ConfigurationManager.AppSettings["ZoneId"]);
+                settings.ZoneId = uint.Parse(GetSetting("ZoneId"));
             }
 
-            if (ConfigurationManager.AppSettings["MapsPath"] != null)
+            if (GetSetting("MapsPath") != null)
             {
-                settings.MapsPath = ConfigurationManager.AppSettings["MapsPath"];
+                settings.MapsPath = GetSetting("MapsPath");
 
-                if (ConfigurationManager.AppSettings["LoadMapsCollision"] != null)
+                if (GetSetting("LoadMapsCollision") != null)
                 {
-                    if (bool.TryParse(ConfigurationManager.AppSettings["LoadMapsCollision"], out bool value))
+                    if (bool.TryParse(GetSetting("LoadMapsCollision"), out bool value))
                     {
                         settings.LoadMapsCollision = value;
                     }
@@ -67,9 +76,9 @@ public class GameServerModule : Module
                 }
             }
 
-            if (ConfigurationManager.AppSettings["LoadZoneEntities"] != null)
+            if (GetSetting("LoadZoneEntities") != null)
             {
-                if (bool.TryParse(ConfigurationManager.AppSettings["LoadZoneEntities"], out bool value))
+                if (bool.TryParse(GetSetting("LoadZoneEntities"), out bool value))
                 {
                     settings.LoadZoneEntities = value;
                 }
@@ -79,9 +88,9 @@ public class GameServerModule : Module
                 }
             }
 
-            if (ConfigurationManager.AppSettings["AllowHardcodedFallback"] != null)
+            if (GetSetting("AllowHardcodedFallback") != null)
             {
-                if (bool.TryParse(ConfigurationManager.AppSettings["AllowHardcodedFallback"], out bool value))
+                if (bool.TryParse(GetSetting("AllowHardcodedFallback"), out bool value))
                 {
                     settings.AllowHardcodedFallback = value;
                 }
