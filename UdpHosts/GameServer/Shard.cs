@@ -126,6 +126,10 @@ public class Shard : IShard
     {
         if (Clients.ContainsKey(player.SocketId))
         {
+            // Persist session state before the entity goes away so
+            // disconnects save the same as a clean logout.
+            Data.SessionPersistence.SaveSessionData(player);
+
             if (Entities.ContainsKey(player.CharacterId))
             {
                 EntityMan.Remove(player.CharacterId);

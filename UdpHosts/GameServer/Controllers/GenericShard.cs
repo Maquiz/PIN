@@ -93,37 +93,10 @@ public class GenericShard : Base
         var resp = new CloseConnection { Unk = new byte[] { 0, 0, 0, 0 } };
         client.NetChannels[ChannelType.Control].SendMessage(resp);
 
-        var zone = player.CurrentZone;
-
-        if (!zone.IsOpenWorld)
-        {
-            return;
-        }
-
-        var playerPosition = player.CharacterEntity.Position;
-
-        var minDistance = Vector3.DistanceSquared(playerPosition, zone.POIs["spawn"]);
-        var closestOutpostId = zone.DefaultOutpostId;
-
-        if (client.AssignedShard.Outposts.TryGetValue(zone.ID, out var outposts))
-        {
-            foreach (var outpost in outposts)
-            {
-                var distance = Vector3.DistanceSquared(playerPosition, outpost.Value.Outpost_ObserverView.PositionProp);
-
-                if (distance < minDistance)
-                {
-                    minDistance = distance;
-                    closestOutpostId = outpost.Key;
-                }
-            }
-        }
-
-        _ = GRPCService.SaveCharacterSessionDataAsync(
-              player.CharacterId + 0xFE,
-              zone.ID,
-              closestOutpostId,
-              (uint)DateTimeOffset.UtcNow.ToUnixTimeSeconds() - player.ConnectedAt);
+        // Session data is saved by Shard.MigrateOut when the client closes,
+        // via the shared SessionPersistence helper; save here too in case the
+        // client never sends CloseConnection after this response.
+        Data.SessionPersistence.SaveSessionData(player as INetworkPlayer);
     }
 
     [MessageID((byte)Commands.RequestEncounterInfo)]
