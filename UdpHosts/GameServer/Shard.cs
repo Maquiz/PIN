@@ -124,6 +124,18 @@ public class Shard : IShard
         ProjectileSim.Tick(deltaTime, currentTime, ct);
         Loot.Tick(deltaTime, currentTime, ct);
 
+        // Force-respawn players that bled out without tapping out.
+        // (NetworkPlayer.Tick is never called, so this lives in the shard tick.)
+        foreach (var client in Clients.Values)
+        {
+            var character = client.CharacterEntity;
+            if (character is { Alive: false, ForcedRespawnTime: > 0 } && CurrentTime > character.ForcedRespawnTime)
+            {
+                Logger.Information("[Respawn] Forced respawn for {0} (bleedout expired)", character.EntityId);
+                client.Respawn();
+            }
+        }
+
         if (currentTime > _lastTimeoutSweep + TimeoutSweepIntervalMs)
         {
             _lastTimeoutSweep = currentTime;

@@ -379,14 +379,6 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
                 break;
             case IPlayer.PlayerStatus.Playing:
                 {
-                    // Force-respawn players that bled out without tapping out
-                    if (CharacterEntity is { Alive: false, ForcedRespawnTime: > 0 }
-                        && AssignedShard.CurrentTime > CharacterEntity.ForcedRespawnTime)
-                    {
-                        Console.WriteLine($"[Respawn] Forced respawn for {CharacterEntity.EntityId} (bleedout expired)");
-                        Respawn();
-                    }
-
                     break;
                 }
         }
