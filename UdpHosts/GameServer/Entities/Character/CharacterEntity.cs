@@ -152,6 +152,11 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public uint NpcAttackIntervalMs { get; set; } = 2000;
     public ulong NpcRespawnTime { get; set; }
     public uint NpcRespawnDelayMs { get; set; } = 30000;
+
+    // Player bleedout: when tap-out unlocks and when the server force-respawns (0 = not down)
+    public uint TapOutDelayMs { get; set; } = 2000;
+    public uint ForcedRespawnDelayMs { get; set; } = 30000;
+    public uint ForcedRespawnTime { get; set; }
     public byte NpcLevel { get; set; } = 1;
     public byte DamageResponseId { get; set; }
     public float CollisionRadius { get; set; } = 0.9f;
@@ -991,11 +996,14 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public void Die(IAptitudeTarget killer)
     {
         Alive = false;
-        SetCharacterState(CharacterStateData.CharacterStatus.Dead, Shard.CurrentTime);
 
-        // Send Killed event
         if (IsPlayerControlled)
         {
+            // The client's bleedout UI (gui/components/MainUI/HUD/Bleedout) only offers the
+            // tap-out/respawn input in the Incapacitated state; in Dead it disables all
+            // prompts and passively waits for the server. So players go down, not dead.
+            SetCharacterState(CharacterStateData.CharacterStatus.Incapacitated, Shard.CurrentTime);
+
             var killed = new AeroMessages.GSS.V66.Character.Event.Killed
             {
                 ShortTime = Shard.CurrentShortTime,
@@ -1006,16 +1014,17 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
             };
             Player.NetChannels[ChannelType.ReliableGss].SendMessage(killed, EntityId);
 
-            // Enable respawn input
+            // Enable respawn (tap-out) input
             SetPermissionFlag(PermissionFlagsData.CharacterPermissionFlags.respawn_input, true);
 
-            // Drive the death screen's respawn countdown; cleared again on respawn
+            // Bleedout UI timers: AvailableAt = when tap-out unlocks, ForcedAt = auto-respawn
+            ForcedRespawnTime = Shard.CurrentTime + ForcedRespawnDelayMs;
             if (Character_BaseController != null)
             {
                 Character_BaseController.RespawnTimesProp = new RespawnTimesData
                 {
-                    AvailableAt = Shard.CurrentTime + 3000,
-                    ForcedAt = Shard.CurrentTime + 60000
+                    AvailableAt = Shard.CurrentTime + TapOutDelayMs,
+                    ForcedAt = ForcedRespawnTime
                 };
             }
 
@@ -1023,6 +1032,8 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
         }
         else
         {
+            SetCharacterState(CharacterStateData.CharacterStatus.Dead, Shard.CurrentTime);
+
             // NPC death: broadcast Killed to all clients
             var killed = new AeroMessages.GSS.V66.Character.Event.Killed
             {

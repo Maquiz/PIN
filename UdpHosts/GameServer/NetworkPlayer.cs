@@ -211,9 +211,13 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
     private void RespawnInternal()
     {
         // The client handles this message sequence fine at zone-in (state Living), but when
-        // it has seen the Dead state it needs a full re-init of its own character afterwards,
+        // it has seen a death state it needs a full re-init of its own character afterwards,
         // mirroring zone-in — see ResyncOwnCharacter below.
-        bool wasDead = CharacterEntity.CharacterState.State == CharacterStateData.CharacterStatus.Dead;
+        bool wasDead = CharacterEntity.CharacterState.State
+            is CharacterStateData.CharacterStatus.Dead
+            or CharacterStateData.CharacterStatus.Incapacitated;
+
+        CharacterEntity.ForcedRespawnTime = 0;
 
         SpawnPoint spawnPoint;
         try
@@ -375,6 +379,14 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
                 break;
             case IPlayer.PlayerStatus.Playing:
                 {
+                    // Force-respawn players that bled out without tapping out
+                    if (CharacterEntity is { Alive: false, ForcedRespawnTime: > 0 }
+                        && AssignedShard.CurrentTime > CharacterEntity.ForcedRespawnTime)
+                    {
+                        Console.WriteLine($"[Respawn] Forced respawn for {CharacterEntity.EntityId} (bleedout expired)");
+                        Respawn();
+                    }
+
                     break;
                 }
         }
