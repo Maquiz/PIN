@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using System.Threading.Tasks;
 using GameServer.GRPC;
 
 namespace GameServer.Data;
@@ -7,21 +8,23 @@ namespace GameServer.Data;
 /// <summary>
 /// Single place that computes and persists a player's session data
 /// (zone, nearest outpost, time played). Called from clean logout and
-/// from Shard.MigrateOut so disconnects save the same way.
+/// from Shard.MigrateOut so disconnects save the same way. Returns the
+/// underlying gRPC write so shutdown can wait for the flush; regular
+/// callers may ignore it (fire-and-forget).
 /// </summary>
 public static class SessionPersistence
 {
-    public static void SaveSessionData(INetworkPlayer player)
+    public static Task SaveSessionData(INetworkPlayer player)
     {
         if (player?.CharacterEntity == null || player.CurrentZone == null)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         var zone = player.CurrentZone;
         if (!zone.IsOpenWorld)
         {
-            return;
+            return Task.CompletedTask;
         }
 
         var playerPosition = player.CharacterEntity.Position;
@@ -43,7 +46,7 @@ public static class SessionPersistence
 
         // CharacterId is the entity id; +0xFE restores the character guid
         // type tag (see GUIDService.Character) used by webapi.Characters.
-        _ = GRPCService.SaveCharacterSessionDataAsync(
+        return GRPCService.SaveCharacterSessionDataAsync(
             player.CharacterId + 0xFE,
             zone.ID,
             closestOutpostId,

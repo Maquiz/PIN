@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
 using GameServer.Aptitude;
 using GameServer.Entities;
 using GameServer.Entities.Outpost;
@@ -48,5 +49,6 @@ public interface IShard : IPacketSender
     void NetworkTick(double deltaTime, ulong currentTime, CancellationToken ct);
     bool MigrateOut(INetworkPlayer player);
     bool MigrateIn(INetworkPlayer player);
+    Task SaveAllSessionsAsync();
     ushort AssignNewRefId(IEntity entity, Enums.GSS.Controllers controller);
 }

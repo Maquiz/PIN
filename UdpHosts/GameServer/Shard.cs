@@ -23,11 +23,13 @@ public class Shard : IShard
     private const double NetworkTickRate = 1.0 / 20.0;
     private const uint ClientTimeoutMs = 30_000;
     private const uint TimeoutSweepIntervalMs = 5_000;
+    private const uint AutosaveIntervalMs = 300_000;
 
     private long _startTime;
     private double _lastNetTick;
     private ushort _lastEntityRefId;
     private ulong _lastTimeoutSweep;
+    private ulong _lastAutosave;
 
     public Shard(double gameTickRate, ulong instanceId, GameServerSettings settings, IPacketSender sender, Serilog.ILogger logger)
     {
@@ -128,7 +130,31 @@ public class Shard : IShard
             SweepTimedOutClients();
         }
 
+        if (currentTime > _lastAutosave + AutosaveIntervalMs)
+        {
+            _lastAutosave = currentTime;
+            _ = SaveAllSessionsAsync();
+        }
+
         return true;
+    }
+
+    /// <summary>
+    ///     Persists session data for every in-game player. Runs periodically so a
+    ///     server crash loses at most one autosave interval, and awaited on shutdown.
+    /// </summary>
+    public Task SaveAllSessionsAsync()
+    {
+        var saves = new List<Task>();
+        foreach (var client in Clients.Values)
+        {
+            if (client.Status.Equals(IPlayer.PlayerStatus.Playing))
+            {
+                saves.Add(Data.SessionPersistence.SaveSessionData(client));
+            }
+        }
+
+        return Task.WhenAll(saves);
     }
 
     /// <summary>

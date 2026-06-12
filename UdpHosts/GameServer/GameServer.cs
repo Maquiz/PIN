@@ -28,6 +28,7 @@ internal class GameServer : PacketServer
     private GameServerSettings  _settings;
 
     private byte _nextShardId;
+    private int _sessionsFlushed;
 
     public GameServer(GameServerSettings serverSettings,
                       ILogger logger,
@@ -59,6 +60,30 @@ internal class GameServer : PacketServer
         NewShard(ct);
 
         _ = ListenGrpcAsync(ct);
+    }
+
+    /// <summary>
+    ///     Synchronously persists every connected player's session. Called from the
+    ///     Ctrl+C/process-exit hooks, where fire-and-forget saves would be cut off.
+    /// </summary>
+    public void FlushAllSessions()
+    {
+        if (Interlocked.Exchange(ref _sessionsFlushed, 1) == 1)
+        {
+            return;
+        }
+
+        Logger.Information("Shutdown: flushing player sessions");
+        try
+        {
+            var flushed = Task.WhenAll(_shards.Values.Select(s => s.SaveAllSessionsAsync()))
+                .Wait(TimeSpan.FromSeconds(5));
+            Logger.Information(flushed ? "Shutdown: sessions flushed" : "Shutdown: session flush timed out after 5s");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("Shutdown: session flush failed: {0}", ex.Message);
+        }
     }
 
     protected override async void ServerRunThreadAsync(CancellationToken ct)

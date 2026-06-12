@@ -21,6 +21,12 @@ internal static class Program
         }
 
         var server = container.Resolve<GameServer>();
+
+        // Persist all sessions on Ctrl+C and process exit; in-tick saves are
+        // fire-and-forget and would be cut off by process termination.
+        Console.CancelKeyPress += (_, _) => server.FlushAllSessions();
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => server.FlushAllSessions();
+
         server.Run();
     }
 
