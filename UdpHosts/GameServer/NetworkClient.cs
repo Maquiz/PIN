@@ -219,6 +219,16 @@ public class NetworkClient : INetworkClient
         {
             case MatrixPacketType.Login:
                 var aeroLogin = packet.Unpack<Login>();
+
+                // Diagnostic for the session-ticket work (Phase 2.3): capture what the
+                // client actually sends so RIN-issued tickets can be validated here.
+                // The MatrixTicket encoding is undocumented; these logs reveal it.
+                Logger.Information("[LoginDiag] CharacterGuid=0x{0:X16} IsDev={1} ClientVersion={2} Locale={3}", aeroLogin.CharacterGuid, aeroLogin.CharacterIsDev, aeroLogin.ClientVersion, aeroLogin.Locale);
+                Logger.Information("[LoginDiag] Red5Sig2: {0}", aeroLogin.Red5Sig2 ?? "<null>");
+                Logger.Information("[LoginDiag] Ticket Part1: {0}", BitConverter.ToString(aeroLogin.Ticket.Part1 ?? Array.Empty<byte>()));
+                Logger.Information("[LoginDiag] Ticket Part2: {0}", BitConverter.ToString(aeroLogin.Ticket.Part2 ?? Array.Empty<byte>()));
+                Logger.Information("[LoginDiag] Ticket Part9: {0}", BitConverter.ToString(aeroLogin.Ticket.Part9 ?? Array.Empty<byte>()));
+
                 Player.Login(aeroLogin.CharacterGuid);
                 break;
             case MatrixPacketType.EnterZoneAck:
