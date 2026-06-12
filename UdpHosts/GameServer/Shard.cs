@@ -238,7 +238,7 @@ public class Shard : IShard
 
     public ulong GetNextGuid(byte type = (byte)Enums.GSS.Controllers.Generic)
     {
-        return GuidService.GetNext(this, type);
+        return GuidService.GetNext(type);
     }
 
     protected virtual bool ShouldNetworkTick(double deltaTime, ulong currentTime)
