@@ -125,6 +125,17 @@ public class NetworkPlayer : NetworkClient, INetworkPlayer
 
         if (!loadedFromDb)
         {
+            // New characters are seeded by RIN at creation (webapi.seed_character_inventory),
+            // so an empty inventory here means the character predates that, the
+            // NewCharacterTemplate tables are empty, or seeding failed.
+            if (!AssignedShard.Settings.AllowHardcodedFallback)
+            {
+                Logger.Error("Refusing login for character 0x{0:X16}: no inventory in the DB. Check the webapi.NewCharacterTemplate* tables are populated (sql/Data/NewCharacterTemplate.sql), or set AllowHardcodedFallback=true to seed legacy defaults.", characterId);
+                RefuseLogin();
+                return;
+            }
+
+            Logger.Warning("Character 0x{0:X16} has no inventory in the DB, seeding hardcoded DEV defaults (AllowHardcodedFallback=true)", characterId);
             Inventory.LoadHardcodedInventory();
 
             // Seed to DB for next login (fire-and-forget)
