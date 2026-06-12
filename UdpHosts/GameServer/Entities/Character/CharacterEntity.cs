@@ -157,6 +157,10 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     public uint TapOutDelayMs { get; set; } = 2000;
     public uint ForcedRespawnDelayMs { get; set; } = 30000;
     public uint ForcedRespawnTime { get; set; }
+
+    // Battleframe progression, loaded from webapi."Battleframes" via gRPC
+    public uint Level { get; set; } = HardcodedCharacterData.Level;
+    public ulong Xp { get; set; }
     public byte NpcLevel { get; set; } = 1;
     public byte DamageResponseId { get; set; }
     public float CollisionRadius { get; set; } = 0.9f;
@@ -467,6 +471,8 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
                 ArmyTag = remoteData.CharacterInfo.ArmyTag,
                 ArmyIsOfficer = remoteData.CharacterInfo.ArmyIsOfficer,
                 TimePlayed = (int)remoteData.CharacterInfo.TimePlayed,
+                Level = remoteData.CharacterInfo.BattleframeLevel,
+                Xp = remoteData.CharacterInfo.BattleframeXp,
             },
             CharacterVisuals = new Data.BasicCharacterVisuals()
             {
@@ -493,6 +499,14 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
     {
         var info = data.CharacterInfo;
         var visuals = data.CharacterVisuals;
+
+        if (info.Level > 0)
+        {
+            Level = info.Level;
+            Xp = info.Xp;
+        }
+
+        Character_EquipmentView.LevelProp = (byte)Level;
 
         SetStaticInfo(new StaticInfoData
         {
@@ -1761,8 +1775,8 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
             ReputationEventModifierProp = new StatModifierData { ModifierId = 0, StatValue = 0.0f },
             WalletProp = new WalletData { Beans = 999, Epoch = 1462889864 },
             LoyaltyProp = new LoyaltyData { Current = 0, Lifetime = 0, Tier = 0 },
-            LevelProp = HardcodedCharacterData.Level,
-            EffectiveLevelProp = HardcodedCharacterData.EffectiveLevel,
+            LevelProp = (byte)Level,
+            EffectiveLevelProp = (byte)Level,
             LevelResetCountProp = 0,
             OldestDeployablesProp = new OldestDeployablesField { Data = Array.Empty<OldestDeployablesData>() },
             PerkRespecsProp = 0,

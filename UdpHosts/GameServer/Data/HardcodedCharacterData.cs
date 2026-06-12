@@ -960,6 +960,8 @@ public class BasicCharacterInfo
     public ulong ArmyGuid { get; set; }
     public bool ArmyIsOfficer { get; set; }
     public int TimePlayed { get; set; }
+    public uint Level { get; set; }
+    public ulong Xp { get; set; }
 }
 
 public class BasicCharacterVisuals

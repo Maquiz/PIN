@@ -66,6 +66,8 @@ message BasicCharacterInfo {
    uint32 LastZoneId = 10;
    uint32 LastOutpostId = 11;
    uint32 TimePlayed = 12;
+   uint32 BattleframeLevel = 13;
+   uint64 BattleframeXp = 14;
 }
 message CharacterAndBattleframeVisuals {
    BasicCharacterInfo CharacterInfo = 1;
