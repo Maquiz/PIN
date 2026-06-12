@@ -21,10 +21,13 @@ namespace GameServer;
 public class Shard : IShard
 {
     private const double NetworkTickRate = 1.0 / 20.0;
+    private const uint ClientTimeoutMs = 30_000;
+    private const uint TimeoutSweepIntervalMs = 5_000;
 
     private long _startTime;
     private double _lastNetTick;
     private ushort _lastEntityRefId;
+    private ulong _lastTimeoutSweep;
 
     public Shard(double gameTickRate, ulong instanceId, GameServerSettings settings, IPacketSender sender, Serilog.ILogger logger)
     {
@@ -119,7 +122,42 @@ public class Shard : IShard
         ProjectileSim.Tick(deltaTime, currentTime, ct);
         Loot.Tick(deltaTime, currentTime, ct);
 
+        if (currentTime > _lastTimeoutSweep + TimeoutSweepIntervalMs)
+        {
+            _lastTimeoutSweep = currentTime;
+            SweepTimedOutClients();
+        }
+
         return true;
+    }
+
+    /// <summary>
+    ///     Migrates out clients whose connection has gone silent (killed process, crash,
+    ///     network drop) — they never send CloseConnection, so without this their session
+    ///     is never saved and the entity lingers until a duplicate login evicts it.
+    /// </summary>
+    private void SweepTimedOutClients()
+    {
+        List<INetworkPlayer> timedOut = null;
+        var cutoff = DateTime.Now.AddMilliseconds(-ClientTimeoutMs);
+        foreach (var client in Clients.Values)
+        {
+            if (client.NetLastActive < cutoff)
+            {
+                (timedOut ??= new List<INetworkPlayer>()).Add(client);
+            }
+        }
+
+        if (timedOut == null)
+        {
+            return;
+        }
+
+        foreach (var player in timedOut)
+        {
+            Logger.Information("Client {0} (character 0x{1:X16}) timed out after {2}s of silence, migrating out", player.SocketId, player.CharacterId, ClientTimeoutMs / 1000);
+            MigrateOut(player);
+        }
     }
 
     public bool MigrateOut(INetworkPlayer player)
