@@ -30,29 +30,7 @@ public class MovementRelay
         var movementStateValue = posRotState.MovementState;
         character.MovementStateContainer.MovementStateValue = (ushort)movementStateValue;
 
-        // Confirm the pose with the client
-        var confirmedPose = new ConfirmedPoseUpdate
-        {
-            PoseData = new MovementPoseData
-            {
-                ShortTime = input.ShortTime,
-                MovementType = MovementDataType.PosRotState,
-                WaterLevelAndDesc = poseData.WaterLevelAndDesc,
-                PosRotState = new MovementPosRotState
-                            {
-                                Pos = character.Position,
-                                Rot = character.Rotation,
-                                MovementState = movementStateValue // ToDo: This was ushort previously!
-                            },
-                Velocity = character.Velocity,
-                JetpackEnergy = poseData.JetpackEnergy,
-                GroundTimePositiveAirTimeNegative = poseData.GroundTimePositiveAirTimeNegative, // Somehow affects gravity
-                TimeSinceLastJump = poseData.TimeSinceLastJump,
-                HaveDebugData = 0
-            },
-            NextShortTime = unchecked((ushort)(input.ShortTime + 90)) // This value has to be in the future, nobody cares why.
-        };
-        client.NetChannels[ChannelType.UnreliableGss].SendMessage(confirmedPose, character.EntityId);
+        SendPoseConfirmation(client, character, input);
 
         // Forward update to remote clients
         var currentPose = new CurrentPoseUpdate
@@ -80,6 +58,46 @@ public class MovementRelay
                 remoteClient.NetChannels[ChannelType.UnreliableGss].SendMessage(currentPose, character.EntityId);
             }
         }
+    }
+
+    /// <summary>
+    ///     Acknowledges a movement input without applying it to the entity. The client keeps
+    ///     streaming MovementInput while dead and reads the pose confirmations as connection
+    ///     health — going silent makes it show "connection problems" and stall the death UI.
+    /// </summary>
+    public void ConfirmPoseOnly(INetworkClient client, IEntity entity, AeroMessages.GSS.V66.Character.Command.MovementInput input)
+    {
+        if (entity is Entities.Character.CharacterEntity character)
+        {
+            SendPoseConfirmation(client, character, input);
+        }
+    }
+
+    private void SendPoseConfirmation(INetworkClient client, Entities.Character.CharacterEntity character, AeroMessages.GSS.V66.Character.Command.MovementInput input)
+    {
+        var poseData = input.PoseData;
+        var confirmedPose = new ConfirmedPoseUpdate
+        {
+            PoseData = new MovementPoseData
+            {
+                ShortTime = input.ShortTime,
+                MovementType = MovementDataType.PosRotState,
+                WaterLevelAndDesc = poseData.WaterLevelAndDesc,
+                PosRotState = new MovementPosRotState
+                            {
+                                Pos = character.Position,
+                                Rot = character.Rotation,
+                                MovementState = poseData.PosRotState.MovementState // ToDo: This was ushort previously!
+                            },
+                Velocity = character.Velocity,
+                JetpackEnergy = poseData.JetpackEnergy,
+                GroundTimePositiveAirTimeNegative = poseData.GroundTimePositiveAirTimeNegative, // Somehow affects gravity
+                TimeSinceLastJump = poseData.TimeSinceLastJump,
+                HaveDebugData = 0
+            },
+            NextShortTime = unchecked((ushort)(input.ShortTime + 90)) // This value has to be in the future, nobody cares why.
+        };
+        client.NetChannels[ChannelType.UnreliableGss].SendMessage(confirmedPose, character.EntityId);
     }
 
     public void VehicleMovementInput(INetworkClient client, IEntity entity, AeroMessages.GSS.V66.Vehicle.Command.MovementInput input)

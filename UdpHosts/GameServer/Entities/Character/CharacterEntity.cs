@@ -1008,6 +1008,18 @@ public sealed partial class CharacterEntity : BaseAptitudeEntity, IAptitudeTarge
 
             // Enable respawn input
             SetPermissionFlag(PermissionFlagsData.CharacterPermissionFlags.respawn_input, true);
+
+            // Drive the death screen's respawn countdown; cleared again on respawn
+            if (Character_BaseController != null)
+            {
+                Character_BaseController.RespawnTimesProp = new RespawnTimesData
+                {
+                    AvailableAt = Shard.CurrentTime + 3000,
+                    ForcedAt = Shard.CurrentTime + 60000
+                };
+            }
+
+            Shard.EntityMan.FlushChanges(this);
         }
         else
         {

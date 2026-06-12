@@ -135,7 +135,11 @@ public class BaseController : Base
 
         if (!player.CharacterEntity.Alive)
         {
-            return; // can't move if you're dead (or at least shouldn't o.o")
+            // Don't apply movement while dead, but keep acknowledging the input —
+            // the client reads missing pose confirmations as connection problems
+            // and the death/respawn UI stalls.
+            client.AssignedShard.Movement.ConfirmPoseOnly(client, player.CharacterEntity, movementInput);
+            return;
         }
 
         client.AssignedShard.Movement.CharacterMovementInput(client, player.CharacterEntity, movementInput);
